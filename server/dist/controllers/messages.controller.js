@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.pinMessage = exports.toggleReaction = exports.deleteMessage = exports.editMessage = exports.uploadMedia = exports.sendMessage = exports.getMessages = void 0;
+const mongoose_1 = __importDefault(require("mongoose"));
 const Message_js_1 = require("../models/Message.js");
 const Chat_js_1 = require("../models/Chat.js");
 const supabase_service_js_1 = require("../services/supabase.service.js");
@@ -9,7 +13,14 @@ const getMessages = async (req, res) => {
     try {
         let messages = [];
         try {
-            messages = await Message_js_1.MessageModel.find({ chatId }).sort({ createdAt: 1 });
+            if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
+                messages = await Message_js_1.MessageModel.find({
+                    $or: [{ chatId: 'chat_saved' }, { chatId: { $regex: /^chat_saved/ } }]
+                }).sort({ createdAt: 1 });
+            }
+            else {
+                messages = await Message_js_1.MessageModel.find({ chatId }).sort({ createdAt: 1 });
+            }
         }
         catch (dbErr) {
             console.warn('[MongoDB Messages Get Warning]:', dbErr);
@@ -26,16 +37,18 @@ const sendMessage = async (req, res) => {
     const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
     let chat = null;
     try {
-        const { default: mongoose } = await import('mongoose');
-        if (mongoose.Types.ObjectId.isValid(chatId)) {
+        if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
+            chat = await Chat_js_1.ChatModel.findOne({ type: 'saved' });
+        }
+        else if (mongoose_1.default.Types.ObjectId.isValid(chatId)) {
             chat = await Chat_js_1.ChatModel.findById(chatId);
         }
         else {
-            chat = await Chat_js_1.ChatModel.findOne({ id: chatId });
+            chat = await Chat_js_1.ChatModel.findOne({ username: chatId });
         }
     }
     catch {
-        // Ignore invalid ObjectId error
+        // Ignore error
     }
     const views = chat?.type === 'channel' ? 1 : 0;
     let savedMessage = null;

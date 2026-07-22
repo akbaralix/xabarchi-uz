@@ -40,15 +40,16 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: config.clientOrigin,
+    origin: (_origin, callback) => callback(null, true),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
 
 app.use(cors({
-  origin: config.clientOrigin,
-  credentials: true
+  origin: (_origin, callback) => callback(null, true),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 app.use(express.json({ limit: '50mb' }));
 

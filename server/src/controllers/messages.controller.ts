@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { MessageModel } from '../models/Message.js';
 import { ChatModel } from '../models/Chat.js';
 import { uploadImageToSupabase } from '../services/supabase.service.js';
@@ -8,7 +9,13 @@ export const getMessages = async (req: Request, res: Response): Promise<void> =>
   try {
     let messages: any[] = [];
     try {
-      messages = await MessageModel.find({ chatId }).sort({ createdAt: 1 });
+      if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
+        messages = await MessageModel.find({
+          $or: [{ chatId: 'chat_saved' }, { chatId: { $regex: /^chat_saved/ } }]
+        }).sort({ createdAt: 1 });
+      } else {
+        messages = await MessageModel.find({ chatId }).sort({ createdAt: 1 });
+      }
     } catch (dbErr) {
       console.warn('[MongoDB Messages Get Warning]:', dbErr);
     }
@@ -25,14 +32,15 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
   
   let chat: any = null;
   try {
-    const { default: mongoose } = await import('mongoose');
-    if (mongoose.Types.ObjectId.isValid(chatId)) {
+    if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
+      chat = await ChatModel.findOne({ type: 'saved' });
+    } else if (mongoose.Types.ObjectId.isValid(chatId)) {
       chat = await ChatModel.findById(chatId);
     } else {
-      chat = await ChatModel.findOne({ id: chatId });
+      chat = await ChatModel.findOne({ username: chatId });
     }
   } catch {
-    // Ignore invalid ObjectId error
+    // Ignore error
   }
 
   const views = chat?.type === 'channel' ? 1 : 0;

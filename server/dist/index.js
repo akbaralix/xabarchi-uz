@@ -16,14 +16,15 @@ const app = (0, express_1.default)();
 const server = http_1.default.createServer(app);
 const io = new socket_io_1.Server(server, {
     cors: {
-        origin: index_js_1.config.clientOrigin,
+        origin: (_origin, callback) => callback(null, true),
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE']
     }
 });
 app.use((0, cors_1.default)({
-    origin: index_js_1.config.clientOrigin,
-    credentials: true
+    origin: (_origin, callback) => callback(null, true),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 app.use(express_1.default.json({ limit: '50mb' }));
 // Connect MongoDB Atlas
