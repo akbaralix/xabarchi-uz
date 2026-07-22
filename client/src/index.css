@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg-main: #000000;
+  --bg-card: #0B0B0B;
+  --bg-secondary: #111111;
+  --border-color: rgba(255, 255, 255, 0.05);
+  --accent-color: #229ED9;
+  --success-color: #2ECC71;
+  --danger-color: #FF3B30;
+  --text-main: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --selection-color: rgba(34, 158, 217, 0.18);
+}
+
+* {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Subtle transitions */
+.transition-subtle {
+  transition: all 200ms ease;
+}
+
+/* Custom selection */
+::selection {
+  background-color: var(--selection-color);
+  color: #FFFFFF;
+}
