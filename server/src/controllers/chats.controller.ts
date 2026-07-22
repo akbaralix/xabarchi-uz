@@ -25,17 +25,25 @@ const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toL
 const isValidUsername = (value: string) => /^[a-z0-9_]{5,32}$/.test(value);
 
 const getAuthUserFromRequest = (req: Request): AuthUser | null => {
-  const rawCookie = req.headers.cookie;
-  if (!rawCookie) return null;
+  const authHeader = req.headers.authorization;
+  let token: string | null = null;
 
-  const cookieValue = rawCookie
-    .split(';')
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  }
 
-  if (!cookieValue) return null;
+  if (!token && req.headers.cookie) {
+    const cookieValue = req.headers.cookie
+      .split(';')
+      .map((entry) => entry.trim())
+      .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
 
-  const token = decodeURIComponent(cookieValue.split('=').slice(1).join('='));
+    if (cookieValue) {
+      token = decodeURIComponent(cookieValue.split('=').slice(1).join('='));
+    }
+  }
+
+  if (!token) return null;
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as AuthTokenPayload;

@@ -50,7 +50,13 @@ const signAuthToken = (user: AuthUser) => {
   return jwt.sign(payload, config.jwtSecret, { expiresIn: '30d' });
 };
 
-const getTokenFromCookie = (req: Request): string | null => {
+const getTokenFromRequest = (req: Request): string | null => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearerToken = authHeader.substring(7).trim();
+    if (bearerToken) return bearerToken;
+  }
+
   const rawCookie = req.headers.cookie;
   if (!rawCookie) return null;
 
@@ -64,7 +70,7 @@ const getTokenFromCookie = (req: Request): string | null => {
 };
 
 const getAuthUserFromToken = (req: Request): AuthUser | null => {
-  const token = getTokenFromCookie(req);
+  const token = getTokenFromRequest(req);
   if (!token) return null;
 
   try {

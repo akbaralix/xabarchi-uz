@@ -69,6 +69,9 @@ export const LoginModal: React.FC = () => {
         try {
           const res = await api.get(`/api/auth/telegram/check/${botAuthCode}`);
           if (res.data.status === "authenticated" && res.data.user) {
+            if (res.data.token) {
+              localStorage.setItem("xabarchi_token", res.data.token);
+            }
             clearInterval(intervalId as ReturnType<typeof setInterval>);
             setIsWaitingBot(false);
             login(res.data.user);
@@ -95,6 +98,9 @@ export const LoginModal: React.FC = () => {
       });
 
       if (res.data.success && res.data.user) {
+        if (res.data.token) {
+          localStorage.setItem("xabarchi_token", res.data.token);
+        }
         login(res.data.user);
       }
     } catch {
