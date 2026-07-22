@@ -108,14 +108,10 @@ export const initTelegramAuth = async (req: Request, res: Response): Promise<voi
 
 export const checkTelegramAuth = async (req: Request, res: Response): Promise<void> => {
   const { code } = req.params;
-  const session = botAuthService.checkAuthSession(code);
+  const cleanCode = code ? code.trim() : '';
+  const session = botAuthService.checkAuthSession(cleanCode);
 
-  if (!session) {
-    res.status(404).json({ success: false, status: 'expired', message: "Seans kodi topilmadi yoki vaqti o'tdi" });
-    return;
-  }
-
-  if (session.status === 'authenticated' && session.user) {
+  if (session && session.status === 'authenticated' && session.user) {
     const user = session.user as AuthUser;
     const token = signAuthToken(user);
     setAuthCookie(res, token);

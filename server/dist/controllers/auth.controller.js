@@ -87,12 +87,9 @@ const initTelegramAuth = async (req, res) => {
 exports.initTelegramAuth = initTelegramAuth;
 const checkTelegramAuth = async (req, res) => {
     const { code } = req.params;
-    const session = bot_service_js_1.botAuthService.checkAuthSession(code);
-    if (!session) {
-        res.status(404).json({ success: false, status: 'expired', message: "Seans kodi topilmadi yoki vaqti o'tdi" });
-        return;
-    }
-    if (session.status === 'authenticated' && session.user) {
+    const cleanCode = code ? code.trim() : '';
+    const session = bot_service_js_1.botAuthService.checkAuthSession(cleanCode);
+    if (session && session.status === 'authenticated' && session.user) {
         const user = session.user;
         const token = signAuthToken(user);
         setAuthCookie(res, token);

@@ -64,18 +64,18 @@ export const LoginModal: React.FC = () => {
       intervalId = setInterval(async () => {
         try {
           const res = await api.get(`/api/auth/telegram/check/${botAuthCode}`);
-          if (res.data.status === "authenticated" && res.data.user) {
+          if (res.data?.status === "authenticated" && res.data?.user) {
             if (res.data.token) {
               localStorage.setItem("xabarchi_token", res.data.token);
             }
-            clearInterval(intervalId as ReturnType<typeof setInterval>);
+            if (intervalId) clearInterval(intervalId);
             setIsWaitingBot(false);
             login(res.data.user);
           }
-        } catch {
-          // ignore polling noise
+        } catch (err) {
+          console.warn("[Telegram Polling Warning]:", err);
         }
-      }, 2000);
+      }, 1500);
     }
 
     return () => {
