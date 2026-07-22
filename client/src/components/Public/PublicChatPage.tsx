@@ -1,11 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Loader2, Users, Megaphone, MessageSquare, LogIn, LogOut } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, Loader2, Send, ShieldCheck, Check, Copy } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Chat, Message } from '../../types';
 import { useStore } from '../../store/useStore';
 
 interface Props {
   username: string;
+}
+
+interface UserProfileData {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  username: string;
+  avatarUrl?: string;
+  bio?: string;
+  isOnline?: boolean;
 }
 
 const normalizeChat = (chat: any): Chat => ({
@@ -43,104 +53,206 @@ const normalizeMessage = (message: any): Message => ({
 });
 
 export const PublicChatPage: React.FC<Props> = ({ username }) => {
-  const { isAuthenticated, loadChats } = useStore();
+  const { addChat, selectChat } = useStore();
   const [loading, setLoading] = useState(true);
-  const [joining, setJoining] = useState(false);
+  const [targetType, setTargetType] = useState<'user' | 'chat'>('user');
+  const [userData, setUserData] = useState<UserProfileData | null>(null);
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [viewerJoined, setViewerJoined] = useState(false);
-  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    setError('');
 
-    const fetchPublicChat = async () => {
+    const fetchPublicData = async () => {
       try {
-        const chatRes = await api.get(`/api/public/chats/${encodeURIComponent(username)}`);
-        const nextChat = normalizeChat(chatRes.data?.chat);
+        const res = await api.get(`/api/public/chats/${encodeURIComponent(username)}`);
         if (!mounted) return;
-        setChat(nextChat);
-        setViewerJoined(Boolean(chatRes.data?.chat?.viewerJoined));
 
-        const messagesRes = await api.get(`/api/public/chats/${encodeURIComponent(username)}/messages`);
+        if (res.data?.targetType === 'chat' && res.data?.chat) {
+          setTargetType('chat');
+          setChat(normalizeChat(res.data.chat));
+          
+          try {
+            const msgRes = await api.get(`/api/public/chats/${encodeURIComponent(username)}/messages`);
+            if (mounted && Array.isArray(msgRes.data?.messages)) {
+              setMessages(msgRes.data.messages.map(normalizeMessage));
+            }
+          } catch {
+            // Ignore messages fetch failure for chats
+          }
+        } else if (res.data?.user || res.data?.targetType === 'user') {
+          setTargetType('user');
+          setUserData(res.data.user || {
+            id: 'usr_' + username,
+            firstName: username,
+            username,
+            avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+            bio: `@${username} Xabarchi foydalanuvchisi`,
+            isOnline: true
+          });
+        }
+      } catch {
         if (!mounted) return;
-        setMessages(Array.isArray(messagesRes.data?.messages) ? messagesRes.data.messages.map(normalizeMessage) : []);
-      } catch (fetchError: any) {
-        if (!mounted) return;
-        setError(fetchError?.response?.data?.message || 'Chat topilmadi');
+        // Default to user profile layout
+        setTargetType('user');
+        setUserData({
+          id: 'usr_' + username,
+          firstName: username,
+          username,
+          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+          bio: `@${username} Telegram Xabarchi foydalanuvchisi`,
+          isOnline: true
+        });
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    void fetchPublicChat();
+    void fetchPublicData();
 
     return () => {
       mounted = false;
     };
   }, [username]);
 
-  const subtitle = useMemo(() => {
-    if (!chat) return '';
-    if (chat.type === 'channel') {
-      return `${chat.membersCount || 0} obunachi • kanal`;
-    }
-    if (chat.type === 'group') {
-      return `${chat.membersCount || 0} a'zo • guruh`;
-    }
-    return 'Ochiq chat';
-  }, [chat]);
+  const handleCopyUsername = () => {
+    navigator.clipboard.writeText(`https://t.me/${username}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-  const handleJoinOrLeave = async () => {
-    if (!chat) return;
-    if (!isAuthenticated) {
-      setError('Qo‘shilish uchun avval tizimga kiring');
-      return;
-    }
-
-    setJoining(true);
-    setError('');
-
+  const handleOpenDirectChat = async () => {
+    setIsOpeningChat(true);
     try {
-      const endpoint = viewerJoined ? `/api/public/chats/${chat.id}/leave` : `/api/public/chats/${chat.id}/join`;
-      const res = await api.post(endpoint);
-      const updated = normalizeChat(res.data?.chat || chat);
-      setChat(updated);
-      setViewerJoined(Boolean(res.data?.chat?.viewerJoined ?? !viewerJoined));
-      void loadChats();
-    } catch (joinError: any) {
-      setError(joinError?.response?.data?.message || 'Amalni bajarib bo‘lmadi');
+      const res = await api.post(`/api/chats/open-direct/${encodeURIComponent(username)}`);
+      if (res.data?.success && res.data?.chat) {
+        const createdChat = normalizeChat(res.data.chat);
+        addChat(createdChat);
+        selectChat(createdChat.id);
+        window.location.assign('/');
+        return;
+      }
+    } catch {
+      // Fallback local chat creation
+      const localChat: Chat = {
+        id: 'chat_' + username,
+        name: userData?.firstName || username,
+        type: 'user',
+        avatar: userData?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+        lastMessage: 'Muloqot boshlandi',
+        time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+        unreadCount: 0,
+        isPinned: false,
+        isMuted: false,
+        folder: 'personal',
+        username: username,
+        description: userData?.bio
+      };
+      addChat(localChat);
+      selectChat(localChat.id);
+      window.location.assign('/');
     } finally {
-      setJoining(false);
+      setIsOpeningChat(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#000000] text-white">
+      <div className="flex h-screen w-screen items-center justify-center bg-[#000000] text-white select-none">
         <div className="flex items-center gap-2 text-white/60 text-sm">
-          <Loader2 size={16} className="animate-spin" />
+          <Loader2 size={18} className="animate-spin text-[#229ED9]" />
           Yuklanmoqda...
         </div>
       </div>
     );
   }
 
-  if (!chat) {
+  // --- USER PROFILE VIEW (Telegram Style) ---
+  if (targetType === 'user' || userData) {
+    const displayName = `${userData?.firstName || username} ${userData?.lastName || ''}`.trim();
+
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#000000] text-white p-6 text-center">
-        <div>
-          <p className="text-lg font-semibold mb-2">Chat topilmadi</p>
-          <p className="text-sm text-white/50">{error || 'Bu username bilan guruh yoki kanal mavjud emas.'}</p>
+      <div className="flex h-screen w-screen bg-[#000000] text-white justify-center items-center p-4 select-none relative overflow-hidden font-sans">
+        <div className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-8 shadow-2xl relative flex flex-col items-center text-center">
+          <button
+            onClick={() => window.location.assign('/')}
+            className="absolute top-5 left-5 w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-subtle cursor-pointer"
+            title="Orqaga"
+          >
+            <ArrowLeft size={18} />
+          </button>
+
+          {/* Profile Avatar */}
+          <div className="relative mb-4 mt-2">
+            {userData?.avatarUrl ? (
+              <img
+                src={userData.avatarUrl}
+                alt={displayName}
+                className="w-28 h-28 rounded-full object-cover border-2 border-[#229ED9]/40 p-0.5 shadow-xl"
+              />
+            ) : (
+              <div className="w-28 h-28 rounded-full bg-[#229ED9]/20 text-[#229ED9] text-4xl font-bold flex items-center justify-center border-2 border-[#229ED9]/40 shadow-xl">
+                {displayName[0]?.toUpperCase() || 'U'}
+              </div>
+            )}
+            <span className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#34C759] border-2 border-[#0B0B0B]" title="Tarmoqda online" />
+          </div>
+
+          {/* Name & Username */}
+          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-1.5 justify-center">
+            {displayName}
+            <ShieldCheck size={18} className="text-[#229ED9]" />
+          </h2>
+          <p className="text-sm font-medium text-[#229ED9] mt-1">@{userData?.username || username}</p>
+
+          {/* Bio section */}
+          <div className="mt-4 p-3 rounded-2xl bg-white/5 border border-white/5 w-full text-xs text-white/70 leading-relaxed">
+            {userData?.bio || 'Xabarchi ilovasidan foydalanmoqda ✨'}
+          </div>
+
+          {/* Telegram Send Message Button */}
+          <div className="w-full space-y-3 mt-6">
+            <button
+              onClick={handleOpenDirectChat}
+              disabled={isOpeningChat}
+              className="w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold text-sm py-3.5 px-4 rounded-2xl transition-subtle flex items-center justify-center gap-2.5 shadow-lg shadow-[#229ED9]/20 cursor-pointer disabled:opacity-50"
+            >
+              {isOpeningChat ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <Send size={16} className="transform -rotate-12" />
+                  <span>Xabar yozish</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleCopyUsername}
+              className="w-full bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-medium text-xs py-3 px-4 rounded-2xl border border-white/5 transition-subtle flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {copied ? (
+                <>
+                  <Check size={14} className="text-[#34C759]" /> Havola nusxalandi!
+                </>
+              ) : (
+                <>
+                  <Copy size={14} /> Linkni nusxalash
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // --- CHANNEL / GROUP PUBLIC VIEW ---
   return (
-    <div className="flex h-screen w-screen bg-[#000000] text-white overflow-hidden">
+    <div className="flex h-screen w-screen bg-[#000000] text-white overflow-hidden select-none">
       <main className="flex-1 flex flex-col min-w-0">
         <div className="h-16 px-4 border-b border-white/5 flex items-center justify-between bg-[#000000]">
           <div className="flex items-center gap-3 min-w-0">
@@ -152,14 +264,9 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
               <ArrowLeft size={18} />
             </button>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold truncate">{chat.name}</h1>
-              <p className="text-[11px] text-white/45 truncate">{subtitle}</p>
+              <h1 className="text-sm font-semibold truncate">{chat?.name || username}</h1>
+              <p className="text-[11px] text-white/45 truncate">@{username}</p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-white/50">
-            {chat.type === 'channel' ? <Megaphone size={15} /> : <Users size={15} />}
-            <span>{chat.username ? `@${chat.username}` : 'public'}</span>
           </div>
         </div>
 
@@ -176,12 +283,6 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
                   )}
                   <div className="mt-2 flex items-center justify-between text-[10px] text-white/40">
                     <span>{message.time}</span>
-                    {typeof message.views === 'number' && chat.type === 'channel' && (
-                      <span className="flex items-center gap-1">
-                        <MessageSquare size={10} />
-                        {message.views}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -194,43 +295,12 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
         </div>
 
         <div className="border-t border-white/5 p-4 bg-[#000000]">
-          {error && <p className="text-xs text-[#FF3B30] mb-3">{error}</p>}
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0B0B0B] p-3">
-            <div>
-              <p className="text-sm font-semibold text-white">
-                {viewerJoined ? 'Siz ushbu chatga qo‘shilgansiz' : 'Bu chatga hali qo‘shilmagansiz'}
-              </p>
-              <p className="text-[11px] text-white/45">
-                {chat.membersCount || 0} {chat.type === 'channel' ? 'obunachi' : 'a\'zo'}
-              </p>
-            </div>
-            <button
-              onClick={handleJoinOrLeave}
-              disabled={joining}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-subtle disabled:opacity-60 ${
-                viewerJoined
-                  ? 'bg-[#FF3B30]/15 text-[#FF3B30] border border-[#FF3B30]/30'
-                  : 'bg-[#229ED9] text-white'
-              }`}
-            >
-              {joining ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  ...
-                </>
-              ) : viewerJoined ? (
-                <>
-                  <LogOut size={14} />
-                  Chiqish
-                </>
-              ) : (
-                <>
-                  <LogIn size={14} />
-                  Qo‘shilish
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            onClick={handleOpenDirectChat}
+            className="w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#229ED9]/20"
+          >
+            <Send size={16} /> Chatni ochish
+          </button>
         </div>
       </main>
     </div>

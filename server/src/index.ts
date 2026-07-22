@@ -21,6 +21,7 @@ import {
   toggleMuteChat,
   checkUsernameAvailability,
   getPublicChatByUsername,
+  openDirectChatByUsername,
   joinChat,
   leaveChat,
   getPublicChatMessages
@@ -83,9 +84,14 @@ app.post('/api/chats/:chatId/pin', togglePinChat);
 app.post('/api/chats/:chatId/mute', toggleMuteChat);
 app.get('/api/chats/check-username/:username', checkUsernameAvailability);
 app.get('/api/chats/public/:username', getPublicChatByUsername);
+app.get('/api/public/chats/:username', getPublicChatByUsername);
+app.post('/api/chats/open-direct/:username', openDirectChatByUsername);
 app.get('/api/chats/public/:username/messages', getPublicChatMessages);
+app.get('/api/public/chats/:username/messages', getPublicChatMessages);
 app.post('/api/chats/:chatId/join', joinChat);
-app.post('/api/chats/:chatId/leave', leaveChat);
+app.post('/api/public/chats/:chatId/join', joinChat);
+app.post('/api/chats/:chatId/leave', joinChat);
+app.post('/api/public/chats/:chatId/leave', leaveChat);
 
 // Message & Media Routes
 app.get('/api/chats/:chatId/messages', getMessages);

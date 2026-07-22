@@ -54,9 +54,14 @@ app.post('/api/chats/:chatId/pin', chats_controller_js_1.togglePinChat);
 app.post('/api/chats/:chatId/mute', chats_controller_js_1.toggleMuteChat);
 app.get('/api/chats/check-username/:username', chats_controller_js_1.checkUsernameAvailability);
 app.get('/api/chats/public/:username', chats_controller_js_1.getPublicChatByUsername);
+app.get('/api/public/chats/:username', chats_controller_js_1.getPublicChatByUsername);
+app.post('/api/chats/open-direct/:username', chats_controller_js_1.openDirectChatByUsername);
 app.get('/api/chats/public/:username/messages', chats_controller_js_1.getPublicChatMessages);
+app.get('/api/public/chats/:username/messages', chats_controller_js_1.getPublicChatMessages);
 app.post('/api/chats/:chatId/join', chats_controller_js_1.joinChat);
-app.post('/api/chats/:chatId/leave', chats_controller_js_1.leaveChat);
+app.post('/api/public/chats/:chatId/join', chats_controller_js_1.joinChat);
+app.post('/api/chats/:chatId/leave', chats_controller_js_1.joinChat);
+app.post('/api/public/chats/:chatId/leave', chats_controller_js_1.leaveChat);
 // Message & Media Routes
 app.get('/api/chats/:chatId/messages', messages_controller_js_1.getMessages);
 app.post('/api/messages', messages_controller_js_1.sendMessage);

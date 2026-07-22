@@ -27,13 +27,7 @@ class BotAuthService {
             this.bot = new node_telegram_bot_api_1.default(index_js_1.config.telegramBotToken, { polling: true });
             console.log('[Telegram Bot Service] Bot polling muvaffaqiyatli ishga tushdi! 🤖');
             this.bot.on('polling_error', (error) => {
-                console.warn('[Telegram Bot Polling Warning]:', error);
-                if (!this.pollingStopped) {
-                    this.pollingStopped = true;
-                    void this.bot?.stopPolling().catch((stopError) => {
-                        console.warn('[Telegram Bot Stop Warning]:', stopError);
-                    });
-                }
+                console.warn('[Telegram Bot Polling Warning]:', error.message || error);
             });
             this.bot.onText(/\/start (.+)/, async (msg, match) => {
                 const chatId = msg.chat.id;

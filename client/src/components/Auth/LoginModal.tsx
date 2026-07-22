@@ -47,15 +47,11 @@ export const LoginModal: React.FC = () => {
         setIsWaitingBot(true);
         setAuthMethod("telegram_bot");
         window.open(res.data.botUrl, "_blank");
+      } else {
+        setError(res.data.message || "Telegram bot ulanishda xatolik yuz berdi");
       }
-    } catch {
-      const fallbackCode = String(Math.floor(100000 + Math.random() * 900000));
-      const fallbackUrl = `https://t.me/XabarchiAuthBot?start=${fallbackCode}`;
-      setBotAuthCode(fallbackCode);
-      setBotAuthUrl(fallbackUrl);
-      setIsWaitingBot(true);
-      setAuthMethod("telegram_bot");
-      window.open(fallbackUrl, "_blank");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Server bilan ulanishda xatolik. Qayta urinib ko'ring.");
     } finally {
       setIsLoading(false);
     }

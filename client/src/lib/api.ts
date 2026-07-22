@@ -4,9 +4,8 @@ export const getApiBaseUrl = (): string => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL.replace(/\/$/, '');
   }
-  if (typeof window !== 'undefined' && window.location.hostname) {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    return `${protocol}//${window.location.hostname}:5001`;
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
   }
   return 'http://localhost:5001';
 };

@@ -334,8 +334,9 @@ export const useStore = create<AppState>((set, get) => ({
     const currentChat = get().chats.find((chat) => chat.id === chatId);
     const isChannelPost = currentChat?.type === 'channel';
 
-    const newMsg: Message = {
-      id: 'msg_' + Date.now(),
+    const tempMsgId = 'msg_' + Date.now();
+    const optimisticMsg: Message = {
+      id: tempMsgId,
       chatId,
       senderId: currentUser?.id || 'usr_me',
       senderName: currentUser?.firstName || 'Siz',
@@ -343,7 +344,7 @@ export const useStore = create<AppState>((set, get) => ({
       time: nowTime,
       date: 'Bugun',
       isOutgoing: true,
-      status: 'delivered',
+      status: 'sending',
       replyTo: replyingMsg ? {
         id: replyingMsg.id,
         senderName: replyingMsg.senderName || 'Foydalanuvchi',
@@ -353,6 +354,36 @@ export const useStore = create<AppState>((set, get) => ({
       views: isChannelPost ? 1 : undefined
     };
 
+    // Instant UI update
+    set((state) => {
+      const currentList = state.messagesMap[chatId] || [];
+      const updatedList = [...currentList, optimisticMsg];
+      const updatedChats = state.chats.map((c) => {
+        if (c.id === chatId) {
+          const nextLastMessage = text || (media ? `[${media.type === 'image' ? 'Rasm' : media.type === 'voice' ? 'Ovozli xabar' : 'Fayl'}]` : '');
+          return {
+            ...c,
+            lastMessage: c.type === 'channel' ? (text || 'Yangi post') : nextLastMessage,
+            time: nowTime
+          };
+        }
+        return c;
+      });
+
+      return {
+        messagesMap: {
+          ...state.messagesMap,
+          [chatId]: updatedList
+        },
+        chats: updatedChats,
+        replyingTo: null
+      };
+    });
+
+    // Emit socket event for real-time updates
+    socket.emit('sendMessage', optimisticMsg);
+
+    // Save message to database in background
     try {
       const res = await api.post('/api/messages', {
         chatId,
@@ -366,51 +397,28 @@ export const useStore = create<AppState>((set, get) => ({
         } : undefined,
         media
       });
-      const savedMessage = normalizeMessage(res.data?.message || newMsg);
 
-      socket.emit('sendMessage', savedMessage);
+      const savedMessage = normalizeMessage(res.data?.message || optimisticMsg);
 
       set((state) => {
         const currentList = state.messagesMap[chatId] || [];
-        const exists = currentList.some(m => m.id === savedMessage.id);
-        const updatedList = exists ? currentList : [...currentList, savedMessage];
-
-        const updatedChats = state.chats.map((c) => {
-          if (c.id === chatId) {
-            const nextLastMessage = text || (media ? `[${media.type === 'image' ? 'Rasm' : media.type === 'voice' ? 'Ovozli xabar' : 'Fayl'}]` : '');
-            return {
-              ...c,
-              lastMessage: c.type === 'channel' ? (text || 'Yangi post') : nextLastMessage,
-              time: nowTime
-            };
-          }
-          return c;
-        });
-
+        const updatedList = currentList.map((m) => m.id === tempMsgId ? { ...savedMessage, status: 'delivered' as const } : m);
         return {
           messagesMap: {
             ...state.messagesMap,
             [chatId]: updatedList
-          },
-          chats: updatedChats,
-          replyingTo: null
+          }
         };
       });
     } catch {
       set((state) => {
         const currentList = state.messagesMap[chatId] || [];
-        const updatedList = [...currentList, newMsg];
-        const updatedChats = state.chats.map((c) => {
-          if (c.id === chatId) {
-            return { ...c, lastMessage: text || '[Rasm]', time: nowTime };
-          }
-          return c;
-        });
-
+        const updatedList = currentList.map((m) => m.id === tempMsgId ? { ...m, status: 'delivered' as const } : m);
         return {
-          messagesMap: { ...state.messagesMap, [chatId]: updatedList },
-          chats: updatedChats,
-          replyingTo: null
+          messagesMap: {
+            ...state.messagesMap,
+            [chatId]: updatedList
+          }
         };
       });
     }

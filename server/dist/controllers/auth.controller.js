@@ -33,7 +33,13 @@ const signAuthToken = (user) => {
     };
     return jsonwebtoken_1.default.sign(payload, index_js_1.config.jwtSecret, { expiresIn: '30d' });
 };
-const getTokenFromCookie = (req) => {
+const getTokenFromRequest = (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const bearerToken = authHeader.substring(7).trim();
+        if (bearerToken)
+            return bearerToken;
+    }
     const rawCookie = req.headers.cookie;
     if (!rawCookie)
         return null;
@@ -46,7 +52,7 @@ const getTokenFromCookie = (req) => {
     return decodeURIComponent(found.split('=').slice(1).join('='));
 };
 const getAuthUserFromToken = (req) => {
-    const token = getTokenFromCookie(req);
+    const token = getTokenFromRequest(req);
     if (!token)
         return null;
     try {

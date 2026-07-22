@@ -3,24 +3,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toggleMuteChat = exports.togglePinChat = exports.getPublicChatMessages = exports.leaveChat = exports.joinChat = exports.getPublicChatByUsername = exports.createChat = exports.checkUsernameAvailability = exports.getChats = void 0;
+exports.toggleMuteChat = exports.togglePinChat = exports.getPublicChatMessages = exports.leaveChat = exports.joinChat = exports.openDirectChatByUsername = exports.getPublicChatByUsername = exports.createChat = exports.checkUsernameAvailability = exports.getChats = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const index_js_1 = require("../config/index.js");
 const Chat_js_1 = require("../models/Chat.js");
+const User_js_1 = require("../models/User.js");
 const AUTH_COOKIE_NAME = 'xabarchi_auth';
 const normalizeUsername = (value) => value.trim().replace(/^@+/, '').toLowerCase();
 const isValidUsername = (value) => /^[a-z0-9_]{5,32}$/.test(value);
 const getAuthUserFromRequest = (req) => {
-    const rawCookie = req.headers.cookie;
-    if (!rawCookie)
+    const authHeader = req.headers.authorization;
+    let token = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7).trim();
+    }
+    if (!token && req.headers.cookie) {
+        const cookieValue = req.headers.cookie
+            .split(';')
+            .map((entry) => entry.trim())
+            .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
+        if (cookieValue) {
+            token = decodeURIComponent(cookieValue.split('=').slice(1).join('='));
+        }
+    }
+    if (!token)
         return null;
-    const cookieValue = rawCookie
-        .split(';')
-        .map((entry) => entry.trim())
-        .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
-    if (!cookieValue)
-        return null;
-    const token = decodeURIComponent(cookieValue.split('=').slice(1).join('='));
     try {
         const decoded = jsonwebtoken_1.default.verify(token, index_js_1.config.jwtSecret);
         return decoded.user || null;
@@ -167,12 +174,80 @@ const createChat = async (req, res) => {
 exports.createChat = createChat;
 const getPublicChatByUsername = async (req, res) => {
     try {
-        const username = normalizeUsername(req.params.username || '');
+        const rawUsername = req.params.username || '';
+        const username = normalizeUsername(rawUsername);
         const authUser = getAuthUserFromRequest(req);
+        // 1. Look for public Group or Channel in ChatModel
         const chat = await Chat_js_1.ChatModel.findOne({ username });
-        if (!chat || (chat.type !== 'group' && chat.type !== 'channel')) {
-            res.status(404).json({ success: false, message: 'Chat topilmadi' });
+        if (chat && (chat.type === 'group' || chat.type === 'channel')) {
+            res.json({
+                success: true,
+                targetType: 'chat',
+                chat: serializeChat(chat, authUser?.id)
+            });
             return;
+        }
+        // 2. Look for registered User in UserModel
+        const dbUser = await User_js_1.UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+        if (dbUser) {
+            res.json({
+                success: true,
+                targetType: 'user',
+                user: {
+                    id: dbUser._id.toString(),
+                    firstName: dbUser.firstName,
+                    lastName: dbUser.lastName || '',
+                    username: dbUser.username || username,
+                    avatarUrl: dbUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+                    bio: dbUser.bio || 'Xabarchi ilovasidan foydalanmoqda ✨',
+                    isOnline: dbUser.isOnline !== false
+                }
+            });
+            return;
+        }
+        // 3. Fallback Telegram profile view
+        res.json({
+            success: true,
+            targetType: 'user',
+            user: {
+                id: 'usr_' + username,
+                firstName: username,
+                lastName: '',
+                username,
+                avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+                bio: `@${username} Xabarchi foydalanuvchisi`,
+                isOnline: true
+            }
+        });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.getPublicChatByUsername = getPublicChatByUsername;
+const openDirectChatByUsername = async (req, res) => {
+    try {
+        const rawUsername = req.params.username || '';
+        const username = normalizeUsername(rawUsername);
+        const authUser = getAuthUserFromRequest(req);
+        let chat = await Chat_js_1.ChatModel.findOne({ username, type: 'user' });
+        if (!chat) {
+            const dbUser = await User_js_1.UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+            const chatName = dbUser ? `${dbUser.firstName} ${dbUser.lastName || ''}`.trim() : username;
+            const avatar = dbUser?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+            chat = await Chat_js_1.ChatModel.create({
+                name: chatName,
+                type: 'user',
+                avatar,
+                username,
+                description: dbUser?.bio || 'Shaxsiy suhbat',
+                ownerId: authUser?.id,
+                members: authUser?.id ? [authUser.id] : [],
+                membersCount: 2,
+                lastMessage: 'Muloqot boshlandi',
+                time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+                folder: 'personal'
+            });
         }
         res.json({
             success: true,
@@ -183,7 +258,7 @@ const getPublicChatByUsername = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-exports.getPublicChatByUsername = getPublicChatByUsername;
+exports.openDirectChatByUsername = openDirectChatByUsername;
 const joinChat = async (req, res) => {
     try {
         const authUser = getAuthUserFromRequest(req);

@@ -46,18 +46,20 @@ export const MessageComposer: React.FC = () => {
   const handleSend = async () => {
     if (!text.trim() || !activeChatId) return;
 
-    if (editingMessage) {
-      await editMessage(activeChatId, editingMessage.id, text.trim());
-      setText('');
-      setEditingMessage(null);
-    } else {
-      await sendMessage(activeChatId, text.trim());
-      setText('');
-    }
-
+    const currentText = text.trim();
+    setText('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
+
+    if (editingMessage) {
+      const msgId = editingMessage.id;
+      setEditingMessage(null);
+      await editMessage(activeChatId, msgId, currentText);
+    } else {
+      void sendMessage(activeChatId, currentText);
+    }
+
     sendTypingSignal(activeChatId, false);
   };
 

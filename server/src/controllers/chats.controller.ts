@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 import { ChatModel } from '../models/Chat.js';
+import { UserModel } from '../models/User.js';
 
 type AuthUser = {
   id: string;
@@ -199,13 +200,85 @@ export const createChat = async (req: Request, res: Response): Promise<void> => 
 
 export const getPublicChatByUsername = async (req: Request, res: Response): Promise<void> => {
   try {
-    const username = normalizeUsername(req.params.username || '');
+    const rawUsername = req.params.username || '';
+    const username = normalizeUsername(rawUsername);
     const authUser = getAuthUserFromRequest(req);
 
+    // 1. Look for public Group or Channel in ChatModel
     const chat = await ChatModel.findOne({ username });
-    if (!chat || (chat.type !== 'group' && chat.type !== 'channel')) {
-      res.status(404).json({ success: false, message: 'Chat topilmadi' });
+    if (chat && (chat.type === 'group' || chat.type === 'channel')) {
+      res.json({
+        success: true,
+        targetType: 'chat',
+        chat: serializeChat(chat, authUser?.id)
+      });
       return;
+    }
+
+    // 2. Look for registered User in UserModel
+    const dbUser = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+    if (dbUser) {
+      res.json({
+        success: true,
+        targetType: 'user',
+        user: {
+          id: dbUser._id.toString(),
+          firstName: dbUser.firstName,
+          lastName: dbUser.lastName || '',
+          username: dbUser.username || username,
+          avatarUrl: dbUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+          bio: dbUser.bio || 'Xabarchi ilovasidan foydalanmoqda ✨',
+          isOnline: dbUser.isOnline !== false
+        }
+      });
+      return;
+    }
+
+    // 3. Fallback Telegram profile view
+    res.json({
+      success: true,
+      targetType: 'user',
+      user: {
+        id: 'usr_' + username,
+        firstName: username,
+        lastName: '',
+        username,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+        bio: `@${username} Xabarchi foydalanuvchisi`,
+        isOnline: true
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const openDirectChatByUsername = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const rawUsername = req.params.username || '';
+    const username = normalizeUsername(rawUsername);
+    const authUser = getAuthUserFromRequest(req);
+
+    let chat = await ChatModel.findOne({ username, type: 'user' });
+
+    if (!chat) {
+      const dbUser = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+      const chatName = dbUser ? `${dbUser.firstName} ${dbUser.lastName || ''}`.trim() : username;
+      const avatar = dbUser?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
+
+      chat = await ChatModel.create({
+        name: chatName,
+        type: 'user',
+        avatar,
+        username,
+        description: dbUser?.bio || 'Shaxsiy suhbat',
+        ownerId: authUser?.id,
+        members: authUser?.id ? [authUser.id] : [],
+        membersCount: 2,
+        lastMessage: 'Muloqot boshlandi',
+        time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+        folder: 'personal'
+      });
     }
 
     res.json({
