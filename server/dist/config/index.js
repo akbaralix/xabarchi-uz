@@ -8,6 +8,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 exports.config = {
     port: Number(process.env.PORT || 5000),
+    clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
     jwtSecret: process.env.JWT_SECRET || 'change-me-in-env',
     mongoUri: process.env.MONGODB_URI || '',
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',

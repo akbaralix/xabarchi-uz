@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.uploadMedia = exports.sendMessage = exports.getMessages = void 0;
+exports.pinMessage = exports.toggleReaction = exports.deleteMessage = exports.editMessage = exports.uploadMedia = exports.sendMessage = exports.getMessages = void 0;
 const Message_js_1 = require("../models/Message.js");
 const Chat_js_1 = require("../models/Chat.js");
 const supabase_service_js_1 = require("../services/supabase.service.js");
@@ -24,6 +24,20 @@ exports.getMessages = getMessages;
 const sendMessage = async (req, res) => {
     const { chatId, text, senderId, senderName, replyTo, media } = req.body;
     const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+    let chat = null;
+    try {
+        const { default: mongoose } = await import('mongoose');
+        if (mongoose.Types.ObjectId.isValid(chatId)) {
+            chat = await Chat_js_1.ChatModel.findById(chatId);
+        }
+        else {
+            chat = await Chat_js_1.ChatModel.findOne({ id: chatId });
+        }
+    }
+    catch {
+        // Ignore invalid ObjectId error
+    }
+    const views = chat?.type === 'channel' ? 1 : 0;
     let savedMessage = null;
     try {
         savedMessage = await Message_js_1.MessageModel.create({
@@ -36,13 +50,15 @@ const sendMessage = async (req, res) => {
             isOutgoing: true,
             status: 'delivered',
             replyTo,
-            media
+            media,
+            views
         });
         // Update last message in chat
-        await Chat_js_1.ChatModel.findByIdAndUpdate(chatId, {
-            lastMessage: text || (media ? `[${media.type === 'image' ? 'Rasm' : 'Fayl'}]` : ''),
-            time: timeNow
-        });
+        if (chat) {
+            chat.lastMessage = text || (media ? `[${media.type === 'image' ? 'Rasm' : media.type === 'voice' ? 'Ovozli xabar' : 'Fayl'}]` : '');
+            chat.time = timeNow;
+            await chat.save();
+        }
     }
     catch (dbErr) {
         console.warn('[MongoDB Message Save Warning]:', dbErr);
@@ -58,7 +74,8 @@ const sendMessage = async (req, res) => {
         isOutgoing: savedMessage.isOutgoing,
         status: savedMessage.status,
         replyTo: savedMessage.replyTo,
-        media: savedMessage.media
+        media: savedMessage.media,
+        views: savedMessage.views
     } : {
         id: 'm_' + Date.now(),
         chatId,
@@ -70,7 +87,8 @@ const sendMessage = async (req, res) => {
         isOutgoing: true,
         status: 'delivered',
         replyTo,
-        media
+        media,
+        views
     };
     res.json({ success: true, message: msgData });
 };
@@ -96,3 +114,74 @@ const uploadMedia = async (req, res) => {
     }
 };
 exports.uploadMedia = uploadMedia;
+const editMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { text } = req.body;
+        const message = await Message_js_1.MessageModel.findById(messageId);
+        if (!message) {
+            res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+            return;
+        }
+        message.text = text;
+        message.isEdited = true;
+        message.editedAt = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+        await message.save();
+        res.json({ success: true, message });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.editMessage = editMessage;
+const deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        await Message_js_1.MessageModel.findByIdAndDelete(messageId);
+        res.json({ success: true, messageId });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.deleteMessage = deleteMessage;
+const toggleReaction = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { emoji } = req.body;
+        const message = await Message_js_1.MessageModel.findById(messageId);
+        if (!message) {
+            res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+            return;
+        }
+        const reactions = message.reactions || [];
+        const exists = reactions.includes(emoji);
+        const updatedReactions = exists
+            ? reactions.filter((e) => e !== emoji)
+            : [...reactions, emoji];
+        message.reactions = updatedReactions;
+        await message.save();
+        res.json({ success: true, messageId, reactions: updatedReactions });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.toggleReaction = toggleReaction;
+const pinMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const message = await Message_js_1.MessageModel.findById(messageId);
+        if (!message) {
+            res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+            return;
+        }
+        message.isPinned = !message.isPinned;
+        await message.save();
+        res.json({ success: true, messageId, isPinned: message.isPinned });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+exports.pinMessage = pinMessage;

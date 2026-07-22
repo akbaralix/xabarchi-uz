@@ -1,73 +1,80 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Phone, ArrowRight, CheckCircle2, ShieldCheck, Bot, ExternalLink, RefreshCw } from 'lucide-react';
-import { useStore } from '../../store/useStore';
-import type { User } from '../../types';
-import { api } from '../../lib/api';
+import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Send,
+  Phone,
+  ArrowRight,
+  CheckCircle2,
+  ShieldCheck,
+  Bot,
+  ExternalLink,
+  RefreshCw,
+} from "lucide-react";
+import { useStore } from "../../store/useStore";
+import { api } from "../../lib/api";
 
 export const LoginModal: React.FC = () => {
   const { login } = useStore();
-  const [authMethod, setAuthMethod] = useState<'main' | 'telegram_bot' | 'phone'>('main');
-  const [step, setStep] = useState<'phone' | 'otp' | '2fa'>('phone');
+  const [authMethod, setAuthMethod] = useState<
+    "main" | "telegram_bot" | "phone"
+  >("main");
+  const [step, setStep] = useState<"phone" | "otp" | "2fa">("phone");
 
-  // Telegram bot auth state
   const [botAuthCode, setBotAuthCode] = useState<string | null>(null);
-  const [botAuthUrl, setBotAuthUrl] = useState<string>('https://t.me/XabarchiAuthBot');
+  const [botAuthUrl, setBotAuthUrl] = useState<string>(
+    "https://t.me/XabarchiAuthBot",
+  );
   const [isWaitingBot, setIsWaitingBot] = useState(false);
 
-  // Phone auth state
-  const [countryCode, setCountryCode] = useState('+998');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState(['', '', '', '', '']);
-  const [password2FA, setPassword2FA] = useState('');
+  const [countryCode, setCountryCode] = useState("+998");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otpCode, setOtpCode] = useState(["", "", "", "", ""]);
+  const [password2FA, setPassword2FA] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
-  // INIT TELEGRAM BOT AUTH
+  const fullPhoneNumber = `${countryCode} ${phoneNumber}`.trim();
+
   const startTelegramBotAuth = async () => {
     setIsLoading(true);
-    setError('');
+    setError("");
     try {
-      const res = await api.post('/api/auth/telegram/init');
+      const res = await api.post("/api/auth/telegram/init");
       if (res.data.success) {
         setBotAuthCode(res.data.code);
         setBotAuthUrl(res.data.botUrl);
         setIsWaitingBot(true);
-        setAuthMethod('telegram_bot');
-
-        // Open Telegram bot URL in new tab automatically
-        window.open(res.data.botUrl, '_blank');
+        setAuthMethod("telegram_bot");
+        window.open(res.data.botUrl, "_blank");
       }
     } catch {
-      // Fallback if backend API port is unreachable
       const fallbackCode = String(Math.floor(100000 + Math.random() * 900000));
       const fallbackUrl = `https://t.me/XabarchiAuthBot?start=${fallbackCode}`;
       setBotAuthCode(fallbackCode);
       setBotAuthUrl(fallbackUrl);
       setIsWaitingBot(true);
-      setAuthMethod('telegram_bot');
-      window.open(fallbackUrl, '_blank');
+      setAuthMethod("telegram_bot");
+      window.open(fallbackUrl, "_blank");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // POLL TELEGRAM BOT AUTH STATUS
   useEffect(() => {
-    let intervalId: any = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     if (isWaitingBot && botAuthCode) {
       intervalId = setInterval(async () => {
         try {
           const res = await api.get(`/api/auth/telegram/check/${botAuthCode}`);
-          if (res.data.status === 'authenticated' && res.data.user) {
-            clearInterval(intervalId);
+          if (res.data.status === "authenticated" && res.data.user) {
+            clearInterval(intervalId as ReturnType<typeof setInterval>);
             setIsWaitingBot(false);
             login(res.data.user);
           }
         } catch {
-          // ignore network polling error
+          // ignore polling noise
         }
       }, 2000);
     }
@@ -77,94 +84,94 @@ export const LoginModal: React.FC = () => {
     };
   }, [isWaitingBot, botAuthCode, login]);
 
-  // GOOGLE LOGIN HANDLER
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    setError("");
     try {
-      const googleUser: User = {
-        id: 'usr_google_' + Date.now(),
-        firstName: 'Google',
-        lastName: 'Foydalanuvchisi',
-        username: 'google_user',
-        phone: 'user@gmail.com',
-        bio: 'Google hisobi orqali tizimga kirdi 🌐',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-        isOnline: true
-      };
-      await api.post('/api/auth/google', {
-        googleId: 'g_' + Date.now(),
-        email: 'user@gmail.com',
-        name: 'Google Foydalanuvchisi'
-      }).catch(() => {});
+      const res = await api.post("/api/auth/google", {
+        googleId: "g_" + Date.now(),
+        email: "user@gmail.com",
+        name: "Google Foydalanuvchisi",
+      });
 
-      login(googleUser);
+      if (res.data.success && res.data.user) {
+        login(res.data.user);
+      }
+    } catch {
+      setError("Google orqali kirish vaqtincha ishlamadi");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // PHONE LOGIN HANDLER
-  const handlePhoneSubmit = (e: React.FormEvent) => {
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phoneNumber || phoneNumber.length < 7) {
-      setError('Iltimos, to‘g‘ri telefon raqamini kiriting');
+      setError("Iltimos, to'g'ri telefon raqamini kiriting");
       return;
     }
-    setError('');
+
+    setError("");
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      await api.post("/api/auth/send-code", { phoneNumber: fullPhoneNumber });
+      setStep("otp");
+    } catch {
+      setError("Telefon raqamga kod yuborilmadi");
+    } finally {
       setIsLoading(false);
-      setStep('otp');
-    }, 800);
+    }
   };
 
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) return;
-    const newOtp = [...otpCode];
-    newOtp[index] = value;
-    setOtpCode(newOtp);
+    const next = [...otpCode];
+    next[index] = value;
+    setOtpCode(next);
 
     if (value && index < 4) {
-      const nextInput = document.getElementById(`otp-${index + 1}`);
-      nextInput?.focus();
+      document.getElementById(`otp-${index + 1}`)?.focus();
     }
   };
 
   const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = otpCode.join('');
+    const code = otpCode.join("");
     if (code.length < 5) {
-      setError('5 xonali tasdiqlash kodini to‘liq kiriting');
+      setError("5 xonali tasdiqlash kodini to" + "'" + "liq kiriting");
       return;
     }
-    setError('');
+    setError("");
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      setStep('2fa');
-    }, 800);
+      setStep("2fa");
+    }, 500);
   };
 
-  const handle2FASubmit = (e: React.FormEvent) => {
+  const handle2FASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password2FA) {
-      setError('2-bosqichli parolni kiriting');
+      setError("2-bosqichli parolni kiriting");
       return;
     }
+
     setIsLoading(true);
-    setTimeout(() => {
+    setError("");
+    try {
+      const res = await api.post("/api/auth/verify-code", {
+        phoneNumber: fullPhoneNumber,
+        code: otpCode.join(""),
+      });
+
+      if (res.data.success && res.data.user) {
+        login(res.data.user);
+      }
+    } catch {
+      setError("Telefon orqali kirish vaqtincha ishlamadi");
+    } finally {
       setIsLoading(false);
-      const phoneUser: User = {
-        id: 'usr_phone_' + Date.now(),
-        firstName: 'Foydalanuvchi',
-        username: 'user_phone',
-        phone: `${countryCode} ${phoneNumber}`,
-        bio: 'Telefon raqam orqali kirildi 📱',
-        avatarUrl: '',
-        isOnline: true
-      };
-      login(phoneUser);
-    }, 800);
+    }
   };
 
   return (
@@ -176,12 +183,13 @@ export const LoginModal: React.FC = () => {
         transition={{ duration: 0.2 }}
         className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
       >
-        {/* Header Icon */}
         <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-[#111111] border border-white/10 flex items-center justify-center mb-3 text-[#229ED9]">
-            <Send size={32} className="transform -rotate-12 translate-x-0.5" />
+          <div className="w-28 h-28  flex items-center justify-center mb-3 ">
+            <img src="/src/assets/xabarchi.png" alt="" />
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">Xabarchi Web</h2>
+          <h2 className="text-2xl font-bold text-white tracking-tight">
+            Xabarchi Web
+          </h2>
           <p className="text-xs text-white/55 mt-1 text-center">
             Tizimga kirish usulini tanlang
           </p>
@@ -194,8 +202,7 @@ export const LoginModal: React.FC = () => {
         )}
 
         <AnimatePresence mode="wait">
-          {/* MAIN LOGIN SELECTION */}
-          {authMethod === 'main' && (
+          {authMethod === "main" && (
             <motion.div
               key="main-buttons"
               initial={{ opacity: 0, y: 10 }}
@@ -203,7 +210,6 @@ export const LoginModal: React.FC = () => {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-3"
             >
-              {/* Telegram Login Button */}
               <button
                 onClick={startTelegramBotAuth}
                 disabled={isLoading}
@@ -214,37 +220,35 @@ export const LoginModal: React.FC = () => {
                 ) : (
                   <>
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                      <Send size={14} className="text-white transform -rotate-12" />
+                      <Send
+                        size={14}
+                        className="text-white transform -rotate-12"
+                      />
                     </div>
                     <span>Telegram orqali kirish</span>
                   </>
                 )}
               </button>
 
-              {/* Google Login Button */}
               <button
                 onClick={handleGoogleLogin}
                 disabled={isLoading}
                 className="w-full bg-[#111111] hover:bg-white/10 text-white font-medium text-sm py-3.5 px-4 rounded-2xl border border-white/10 transition-subtle flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
               >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
-                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.29v3.15C3.26 21.3 7.35 24 12 24z" />
-                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.29C.47 8.21 0 10.05 0 12s.47 3.79 1.29 5.42l3.99-3.15z" />
-                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.7 1.29 6.58l3.99 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
-                </svg>
-                <span>Google orqali kirish</span>
+                Google orqali kirish
               </button>
 
               <div className="relative py-2 flex items-center justify-center">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-white/5" />
                 </div>
-                <span className="relative px-3 bg-[#0B0B0B] text-[11px] text-white/40 font-medium">yoki</span>
+                <span className="relative px-3 bg-[#0B0B0B] text-[11px] text-white/40 font-medium">
+                  yoki
+                </span>
               </div>
 
               <button
-                onClick={() => setAuthMethod('phone')}
+                onClick={() => setAuthMethod("phone")}
                 className="w-full bg-transparent hover:bg-white/5 text-white/70 hover:text-white text-xs py-2.5 rounded-xl border border-transparent transition-subtle cursor-pointer"
               >
                 Telefon raqam orqali kirish
@@ -252,8 +256,7 @@ export const LoginModal: React.FC = () => {
             </motion.div>
           )}
 
-          {/* TELEGRAM BOT LIVE POLLING VIEW */}
-          {authMethod === 'telegram_bot' && (
+          {authMethod === "telegram_bot" && (
             <motion.div
               key="telegram-bot-polling"
               initial={{ opacity: 0, x: 20 }}
@@ -263,9 +266,12 @@ export const LoginModal: React.FC = () => {
             >
               <div className="p-4 rounded-2xl bg-[#229ED9]/10 border border-[#229ED9]/20 flex flex-col items-center">
                 <Bot size={40} className="text-[#229ED9] mb-2 animate-bounce" />
-                <h4 className="text-sm font-semibold text-white mb-1">Telegram Botga Ulanyapti</h4>
+                <h4 className="text-sm font-semibold text-white mb-1">
+                  Telegram Botga Ulanyapti
+                </h4>
                 <p className="text-xs text-white/70 leading-relaxed mb-3">
-                  Telegram bot ochilgandan so'ng botdagi <b>/start</b> tugmasini bosing!
+                  Telegram bot ochilgandan so'ng botdagi <b>/start</b> tugmasini
+                  bosing!
                 </p>
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-mono text-[#229ED9]">
                   Kod: {botAuthCode}
@@ -283,13 +289,17 @@ export const LoginModal: React.FC = () => {
                 </a>
 
                 <div className="flex items-center justify-center gap-2 text-xs text-white/40 pt-2">
-                  <RefreshCw size={13} className="animate-spin text-[#229ED9]" /> Kutilmoqda...
+                  <RefreshCw
+                    size={13}
+                    className="animate-spin text-[#229ED9]"
+                  />{" "}
+                  Kutilmoqda...
                 </div>
 
                 <button
                   onClick={() => {
                     setIsWaitingBot(false);
-                    setAuthMethod('main');
+                    setAuthMethod("main");
                   }}
                   className="text-xs text-white/40 hover:text-white pt-2 cursor-pointer"
                 >
@@ -299,30 +309,34 @@ export const LoginModal: React.FC = () => {
             </motion.div>
           )}
 
-          {/* PHONE AUTH FLOW */}
-          {authMethod === 'phone' && (
+          {authMethod === "phone" && (
             <motion.div
               key="phone-auth-wrapper"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
             >
-              {step === 'phone' && (
+              {step === "phone" && (
                 <form onSubmit={handlePhoneSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs text-white/55 mb-2 font-medium">Davlat va Telefon</label>
+                    <label className="block text-xs text-white/55 mb-2 font-medium">
+                      Davlat va Telefon
+                    </label>
                     <div className="flex gap-2">
                       <select
                         value={countryCode}
                         onChange={(e) => setCountryCode(e.target.value)}
                         className="bg-[#111111] border border-white/10 text-white text-xs rounded-xl px-2 py-3 outline-none"
                       >
-                        <option value="+998">🇺🇿 +998</option>
-                        <option value="+1">🇺🇸 +1</option>
-                        <option value="+7">🇷🇺 +7</option>
+                        <option value="+998">+998</option>
+                        <option value="+1">+1</option>
+                        <option value="+7">+7</option>
                       </select>
                       <div className="relative flex-1">
-                        <Phone className="absolute left-3 top-3 text-white/40" size={16} />
+                        <Phone
+                          className="absolute left-3 top-3 text-white/40"
+                          size={16}
+                        />
                         <input
                           type="tel"
                           placeholder="90 123 45 67"
@@ -339,12 +353,18 @@ export const LoginModal: React.FC = () => {
                     disabled={isLoading}
                     className="w-full bg-[#229ED9] text-white font-medium text-xs py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {isLoading ? 'Yuborilmoqda...' : <>SMS Kod Olish <ArrowRight size={14} /></>}
+                    {isLoading ? (
+                      "Yuborilmoqda..."
+                    ) : (
+                      <>
+                        SMS Kod Olish <ArrowRight size={14} />
+                      </>
+                    )}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setAuthMethod('main')}
+                    onClick={() => setAuthMethod("main")}
                     className="w-full text-xs text-white/55 hover:text-white py-1 cursor-pointer"
                   >
                     Boshqa usullar
@@ -352,7 +372,7 @@ export const LoginModal: React.FC = () => {
                 </form>
               )}
 
-              {step === 'otp' && (
+              {step === "otp" && (
                 <form onSubmit={handleOtpSubmit} className="space-y-5">
                   <div className="flex justify-center gap-2">
                     {otpCode.map((digit, idx) => (
@@ -377,7 +397,7 @@ export const LoginModal: React.FC = () => {
                 </form>
               )}
 
-              {step === '2fa' && (
+              {step === "2fa" && (
                 <form onSubmit={handle2FASubmit} className="space-y-4">
                   <input
                     type="password"
@@ -388,7 +408,8 @@ export const LoginModal: React.FC = () => {
                   />
                   <button
                     type="submit"
-                    className="w-full bg-[#229ED9] text-white font-medium text-xs py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                    disabled={isLoading}
+                    className="w-full bg-[#229ED9] text-white font-medium text-xs py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     Kirish <ShieldCheck size={14} />
                   </button>

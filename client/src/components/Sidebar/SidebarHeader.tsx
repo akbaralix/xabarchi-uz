@@ -1,24 +1,22 @@
 import React, { useState } from 'react';
 import { Search, Settings, Edit3, X, Archive, Bookmark, LogOut, Plus, UserPlus, Users, Megaphone, Lock } from 'lucide-react';
 import { useStore } from '../../store/useStore';
-import type { Chat } from '../../types';
+import { api } from '../../lib/api';
 
 export const SidebarHeader: React.FC = () => {
-  const { searchQuery, setSearchQuery, setIsSettingsOpen, user, logout, addChat } = useStore();
+  const { searchQuery, setSearchQuery, setIsSettingsOpen, user, logout, createChat } = useStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [newChatType, setNewChatType] = useState<'user' | 'group' | 'channel'>('user');
   const [newChatName, setNewChatName] = useState('');
   const [newChatUsername, setNewChatUsername] = useState('');
   const [newChatDescription, setNewChatDescription] = useState('');
-  const [newMembersCount, setNewMembersCount] = useState('25');
   const [isPublicChannel, setIsPublicChannel] = useState(true);
 
   const resetForm = () => {
     setNewChatName('');
     setNewChatUsername('');
     setNewChatDescription('');
-    setNewMembersCount('25');
     setIsPublicChannel(true);
     setNewChatType('user');
   };
@@ -29,33 +27,30 @@ export const SidebarHeader: React.FC = () => {
     setIsMenuOpen(false);
   };
 
-  const handleCreateNewChat = (e: React.FormEvent) => {
+  const handleCreateNewChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newChatName.trim()) return;
 
-    const isGroup = newChatType === 'group';
-    const isChannel = newChatType === 'channel';
-
-    const createdChat: Chat = {
-      id: `${newChatType}_${Date.now()}`,
+    await createChat({
       name: newChatName.trim(),
       type: newChatType,
-      avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(newChatName.trim())}`,
-      lastMessage: isChannel ? 'Kanal yaratildi' : 'Muloqot boshlandi',
-      time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-      unreadCount: 0,
-      isPinned: false,
-      isMuted: false,
-      folder: isGroup ? 'groups' : isChannel ? 'channels' : 'personal',
       username: newChatUsername.trim() ? newChatUsername.trim().replace('@', '') : undefined,
       description: newChatDescription.trim() || undefined,
-      membersCount: Number(newMembersCount) || (isGroup ? 12 : isChannel ? 120 : 0),
-      isPublic: isChannel ? isPublicChannel : undefined
-    };
+      isPublic: newChatType === 'channel' ? isPublicChannel : undefined
+    });
 
-    addChat(createdChat);
     resetForm();
     setIsNewChatOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } catch {
+      // ignore logout network errors; local state will still clear
+    } finally {
+      logout();
+    }
   };
 
   return (
@@ -120,7 +115,7 @@ export const SidebarHeader: React.FC = () => {
                   <button
                     onClick={() => {
                       setIsMenuOpen(false);
-                      logout();
+                      void handleLogout();
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
                   >
@@ -186,7 +181,7 @@ export const SidebarHeader: React.FC = () => {
                 </h3>
                 <p className="text-xs text-white/45 mt-1">
                   {newChatType === 'group'
-                    ? 'Guruh nomi, tavsif va a’zolar sonini kiriting.'
+                    ? 'Guruh nomi va tavsifni kiriting.'
                     : newChatType === 'channel'
                       ? 'Kanal nomi va username belgilang. Kanal postlari obunachilarga ko‘rinadi.'
                       : 'Oddiy suhbat yaratish uchun ism kiriting.'}
@@ -234,7 +229,7 @@ export const SidebarHeader: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder={newChatType === 'group' ? 'Masalan: Dasturchilar guruhı' : newChatType === 'channel' ? 'Masalan: Xabarchi News' : 'Masalan: Sardor Bek'}
+                  placeholder={newChatType === 'group' ? 'Masalan: Dasturchilar guruhi' : newChatType === 'channel' ? 'Masalan: Xabarchi News' : 'Masalan: Sardor Bek'}
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
                   className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
@@ -265,21 +260,6 @@ export const SidebarHeader: React.FC = () => {
                 />
               </div>
 
-              {(newChatType === 'group' || newChatType === 'channel') && (
-                <div>
-                  <label className="block text-white/50 mb-1 font-medium">
-                    {newChatType === 'group' ? 'A’zolar soni' : 'Obunachilar soni'}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newMembersCount}
-                    onChange={(e) => setNewMembersCount(e.target.value)}
-                    className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
-                  />
-                </div>
-              )}
-
               {newChatType === 'channel' && (
                 <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#111111] border border-white/10">
                   <div>
@@ -299,14 +279,14 @@ export const SidebarHeader: React.FC = () => {
               {newChatType === 'group' && (
                 <div className="flex items-center gap-2 p-3 rounded-2xl bg-[#111111] border border-white/10 text-[11px] text-white/45">
                   <Lock size={14} className="text-white/45" />
-                  Guruhda xabarlar ikki tomonlama bo‘ladi va suhbat erkin davom etadi.
+                  Guruhda xabarlar ikki tomonlama bo'ladi va suhbat erkin davom etadi.
                 </div>
               )}
 
               {newChatType === 'channel' && (
                 <div className="flex items-center gap-2 p-3 rounded-2xl bg-[#111111] border border-white/10 text-[11px] text-white/45">
                   <Megaphone size={14} className="text-white/45" />
-                  Kanalda faqat egasi post tashlaydi. Postlar ostida ko‘rishlar soni ko‘rinadi.
+                  Kanalda faqat egasi post tashlaydi. Postlar ostida ko'rishlar soni ko'rinadi.
                 </div>
               )}
 

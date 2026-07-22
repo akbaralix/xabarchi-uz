@@ -22,6 +22,20 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
   const { chatId, text, senderId, senderName, replyTo, media } = req.body;
 
   const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+  
+  let chat: any = null;
+  try {
+    const { default: mongoose } = await import('mongoose');
+    if (mongoose.Types.ObjectId.isValid(chatId)) {
+      chat = await ChatModel.findById(chatId);
+    } else {
+      chat = await ChatModel.findOne({ id: chatId });
+    }
+  } catch {
+    // Ignore invalid ObjectId error
+  }
+
+  const views = chat?.type === 'channel' ? 1 : 0;
 
   let savedMessage: any = null;
   try {
@@ -35,14 +49,16 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       isOutgoing: true,
       status: 'delivered',
       replyTo,
-      media
+      media,
+      views
     });
 
     // Update last message in chat
-    await ChatModel.findByIdAndUpdate(chatId, {
-      lastMessage: text || (media ? `[${media.type === 'image' ? 'Rasm' : 'Fayl'}]` : ''),
-      time: timeNow
-    });
+    if (chat) {
+      chat.lastMessage = text || (media ? `[${media.type === 'image' ? 'Rasm' : media.type === 'voice' ? 'Ovozli xabar' : 'Fayl'}]` : '');
+      chat.time = timeNow;
+      await chat.save();
+    }
   } catch (dbErr) {
     console.warn('[MongoDB Message Save Warning]:', dbErr);
   }
@@ -58,7 +74,8 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     isOutgoing: savedMessage.isOutgoing,
     status: savedMessage.status,
     replyTo: savedMessage.replyTo,
-    media: savedMessage.media
+    media: savedMessage.media,
+    views: savedMessage.views
   } : {
     id: 'm_' + Date.now(),
     chatId,
@@ -70,7 +87,8 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     isOutgoing: true,
     status: 'delivered',
     replyTo,
-    media
+    media,
+    views
   };
 
   res.json({ success: true, message: msgData });
@@ -93,6 +111,82 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
       url: publicUrl,
       message: "Rasm Supabase Omboriga muvaffaqiyatli yuklandi! 📸"
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const editMessage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+    const { text } = req.body;
+
+    const message = await MessageModel.findById(messageId);
+    if (!message) {
+      res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+      return;
+    }
+
+    message.text = text;
+    message.isEdited = true;
+    message.editedAt = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+    await message.save();
+
+    res.json({ success: true, message });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteMessage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+    await MessageModel.findByIdAndDelete(messageId);
+    res.json({ success: true, messageId });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const toggleReaction = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+
+    const message = await MessageModel.findById(messageId);
+    if (!message) {
+      res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+      return;
+    }
+
+    const reactions = message.reactions || [];
+    const exists = reactions.includes(emoji);
+    const updatedReactions = exists
+      ? reactions.filter((e) => e !== emoji)
+      : [...reactions, emoji];
+
+    message.reactions = updatedReactions;
+    await message.save();
+
+    res.json({ success: true, messageId, reactions: updatedReactions });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const pinMessage = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { messageId } = req.params;
+    const message = await MessageModel.findById(messageId);
+    if (!message) {
+      res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+      return;
+    }
+
+    message.isPinned = !message.isPinned;
+    await message.save();
+
+    res.json({ success: true, messageId, isPinned: message.isPinned });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

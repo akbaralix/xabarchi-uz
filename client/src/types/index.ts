@@ -59,4 +59,6 @@ export interface Message {
   media?: MediaAttachment;
   isPinned?: boolean;
   views?: number;
+  isEdited?: boolean;
+  editedAt?: string;
 }

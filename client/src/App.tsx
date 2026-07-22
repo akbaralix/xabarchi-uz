@@ -1,12 +1,54 @@
+import { useEffect, useState } from 'react';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { ChatArea } from './components/Chat/ChatArea';
 import { RightInfoPanel } from './components/RightPanel/RightInfoPanel';
 import { LoginModal } from './components/Auth/LoginModal';
 import { SettingsModal } from './components/Settings/SettingsModal';
+import { PublicChatPage } from './components/Public/PublicChatPage';
 import { useStore } from './store/useStore';
+import { api } from './lib/api';
 
 export function App() {
-  const { isAuthenticated, activeChatId } = useStore();
+  const { isAuthenticated, activeChatId, login, loadChats } = useStore();
+  const [authChecked, setAuthChecked] = useState(false);
+  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  const isPublicChatRoute = Boolean(pathname) && pathname !== 'index.html';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    api.get('/api/auth/me')
+      .then((res) => {
+        if (isMounted && res.data?.success && res.data?.user) {
+          login(res.data.user);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setAuthChecked(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [login]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void loadChats();
+  }, [isAuthenticated, loadChats]);
+
+  if (!authChecked) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#000000] text-white">
+        <div className="text-xs text-white/50">Kirish tekshirilmoqda...</div>
+      </div>
+    );
+  }
+
+  if (isPublicChatRoute) {
+    return <PublicChatPage username={pathname} />;
+  }
 
   return (
     <div className="flex h-screen w-screen bg-[#000000] text-white overflow-hidden select-none font-sans relative">

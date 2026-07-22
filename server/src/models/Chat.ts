@@ -11,8 +11,11 @@ export interface IChat extends Document {
   isMuted: boolean;
   folder: 'all' | 'personal' | 'groups' | 'channels' | 'unread' | 'archived';
   members: string[];
+  membersCount?: number;
+  ownerId?: string;
   description?: string;
   username?: string;
+  isPublic?: boolean;
   createdAt: Date;
 }
 
@@ -27,9 +30,12 @@ const ChatSchema: Schema = new Schema(
     isPinned: { type: Boolean, default: false },
     isMuted: { type: Boolean, default: false },
     folder: { type: String, default: 'personal' },
-    members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    members: [{ type: String }],
+    membersCount: { type: Number, default: 0 },
+    ownerId: { type: String },
     description: { type: String },
-    username: { type: String }
+    username: { type: String },
+    isPublic: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

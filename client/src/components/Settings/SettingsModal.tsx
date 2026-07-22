@@ -4,6 +4,7 @@ import {
   X, User as UserIcon, Bell, Lock, Palette, Globe, Monitor, Info, LogOut, Check, Camera
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import { api } from '../../lib/api';
 
 export const SettingsModal: React.FC = () => {
   const { isSettingsOpen, setIsSettingsOpen, user, updateProfile, logout } = useStore();
@@ -23,6 +24,16 @@ export const SettingsModal: React.FC = () => {
     updateProfile({ firstName, lastName, username, bio });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } catch {
+      // ignore logout network errors; local state will still clear
+    } finally {
+      logout();
+    }
   };
 
   const navItems = [
@@ -71,7 +82,7 @@ export const SettingsModal: React.FC = () => {
           <button
             onClick={() => {
               setIsSettingsOpen(false);
-              logout();
+              void handleLogout();
             }}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
           >

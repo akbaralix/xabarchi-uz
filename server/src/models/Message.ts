@@ -23,6 +23,10 @@ export interface IMessage extends Document {
     size?: string;
   };
   isPinned?: boolean;
+  views?: number;
+  isEdited?: boolean;
+  editedAt?: string;
+  deletedFor?: string[];
   createdAt: Date;
 }
 
@@ -49,7 +53,11 @@ const MessageSchema: Schema = new Schema(
       duration: { type: String },
       size: { type: String },
     },
-    isPinned: { type: Boolean, default: false }
+    isPinned: { type: Boolean, default: false },
+    views: { type: Number, default: 0 },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: String },
+    deletedFor: [{ type: String }]
   },
   { timestamps: true }
 );

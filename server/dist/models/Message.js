@@ -57,6 +57,10 @@ const MessageSchema = new mongoose_1.Schema({
         duration: { type: String },
         size: { type: String },
     },
-    isPinned: { type: Boolean, default: false }
+    isPinned: { type: Boolean, default: false },
+    views: { type: Number, default: 0 },
+    isEdited: { type: Boolean, default: false },
+    editedAt: { type: String },
+    deletedFor: [{ type: String }]
 }, { timestamps: true });
 exports.MessageModel = mongoose_1.default.model('Message', MessageSchema);

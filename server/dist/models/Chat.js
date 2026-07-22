@@ -45,8 +45,11 @@ const ChatSchema = new mongoose_1.Schema({
     isPinned: { type: Boolean, default: false },
     isMuted: { type: Boolean, default: false },
     folder: { type: String, default: 'personal' },
-    members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+    members: [{ type: String }],
+    membersCount: { type: Number, default: 0 },
+    ownerId: { type: String },
     description: { type: String },
-    username: { type: String }
+    username: { type: String },
+    isPublic: { type: Boolean, default: false }
 }, { timestamps: true });
 exports.ChatModel = mongoose_1.default.model('Chat', ChatSchema);
