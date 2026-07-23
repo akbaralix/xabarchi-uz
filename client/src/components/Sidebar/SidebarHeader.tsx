@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Search, Settings, Edit3, X, Archive, Bookmark, LogOut, Plus, UserPlus, Users, Megaphone, Lock } from 'lucide-react';
+import { Search, Settings, Edit3, X, Archive, Bookmark, LogOut, Plus, Users, Megaphone, Lock } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { api } from '../../lib/api';
 
 export const SidebarHeader: React.FC = () => {
-  const { searchQuery, setSearchQuery, setIsSettingsOpen, user, logout, createChat } = useStore();
+  const { searchQuery, setSearchQuery, setIsSettingsOpen, user, logout, createChat, selectChat, chats } = useStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-  const [newChatType, setNewChatType] = useState<'user' | 'group' | 'channel'>('user');
+  const [newChatType, setNewChatType] = useState<'group' | 'channel'>('group');
   const [newChatName, setNewChatName] = useState('');
   const [newChatUsername, setNewChatUsername] = useState('');
   const [newChatDescription, setNewChatDescription] = useState('');
@@ -18,10 +18,10 @@ export const SidebarHeader: React.FC = () => {
     setNewChatUsername('');
     setNewChatDescription('');
     setIsPublicChannel(true);
-    setNewChatType('user');
+    setNewChatType('group');
   };
 
-  const openCreateModal = (type: 'user' | 'group' | 'channel') => {
+  const openCreateModal = (type: 'group' | 'channel') => {
     setNewChatType(type);
     setIsNewChatOpen(true);
     setIsMenuOpen(false);
@@ -41,6 +41,16 @@ export const SidebarHeader: React.FC = () => {
 
     resetForm();
     setIsNewChatOpen(false);
+  };
+
+  const openSavedMessages = () => {
+    const savedChat = chats.find((c) => c.type === 'saved');
+    if (savedChat) {
+      selectChat(savedChat.id);
+    } else {
+      selectChat('chat_saved');
+    }
+    setIsMenuOpen(false);
   };
 
   const handleLogout = async () => {
@@ -98,7 +108,7 @@ export const SidebarHeader: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={openSavedMessages}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-white/80 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
                 >
                   <Bookmark size={16} className="text-emerald-400" /> Saqlangan xabarlar
@@ -147,9 +157,9 @@ export const SidebarHeader: React.FC = () => {
         </div>
 
         <button
-          onClick={() => openCreateModal('user')}
+          onClick={() => openCreateModal('group')}
           className="w-10 h-10 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] hover:bg-[#229ED9]/25 transition-subtle cursor-pointer shrink-0"
-          title="Yangi chat"
+          title="Yangi Guruh yoki Kanal"
         >
           <Edit3 size={18} />
         </button>
@@ -160,13 +170,13 @@ export const SidebarHeader: React.FC = () => {
           onClick={() => openCreateModal('group')}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-subtle"
         >
-          <Users size={12} /> Guruh
+          <Users size={12} /> Guruh Yaratish
         </button>
         <button
           onClick={() => openCreateModal('channel')}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-subtle"
         >
-          <Megaphone size={12} /> Kanal
+          <Megaphone size={12} /> Kanal Yaratish
         </button>
       </div>
 
@@ -176,15 +186,13 @@ export const SidebarHeader: React.FC = () => {
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  {newChatType === 'group' ? <Users size={18} className="text-[#229ED9]" /> : newChatType === 'channel' ? <Megaphone size={18} className="text-[#229ED9]" /> : <UserPlus size={18} className="text-[#229ED9]" />}
-                  {newChatType === 'group' ? 'Yangi guruh' : newChatType === 'channel' ? 'Yangi kanal' : 'Yangi chat'}
+                  {newChatType === 'group' ? <Users size={18} className="text-[#229ED9]" /> : <Megaphone size={18} className="text-[#229ED9]" />}
+                  {newChatType === 'group' ? 'Yangi guruh' : 'Yangi kanal'}
                 </h3>
                 <p className="text-xs text-white/45 mt-1">
                   {newChatType === 'group'
                     ? 'Guruh nomi va tavsifni kiriting.'
-                    : newChatType === 'channel'
-                      ? 'Kanal nomi va username belgilang. Kanal postlari obunachilarga ko‘rinadi.'
-                      : 'Oddiy suhbat yaratish uchun ism kiriting.'}
+                    : 'Kanal nomi va username belgilang. Kanal postlari obunachilarga ko‘rinadi.'}
                 </p>
               </div>
               <button
@@ -198,14 +206,7 @@ export const SidebarHeader: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              <button
-                type="button"
-                onClick={() => setNewChatType('user')}
-                className={`py-2.5 rounded-2xl text-xs font-semibold transition-subtle cursor-pointer ${newChatType === 'user' ? 'bg-[#229ED9] text-white' : 'bg-[#111111] text-white/60'}`}
-              >
-                Chat
-              </button>
+            <div className="grid grid-cols-2 gap-2 mb-5">
               <button
                 type="button"
                 onClick={() => setNewChatType('group')}
@@ -225,11 +226,11 @@ export const SidebarHeader: React.FC = () => {
             <form onSubmit={handleCreateNewChat} className="space-y-4 text-xs">
               <div>
                 <label className="block text-white/50 mb-1 font-medium">
-                  {newChatType === 'group' ? 'Guruh nomi' : newChatType === 'channel' ? 'Kanal nomi' : 'Ism yoki nom'}
+                  {newChatType === 'group' ? 'Guruh nomi' : 'Kanal nomi'}
                 </label>
                 <input
                   type="text"
-                  placeholder={newChatType === 'group' ? 'Masalan: Dasturchilar guruhi' : newChatType === 'channel' ? 'Masalan: Xabarchi News' : 'Masalan: Sardor Bek'}
+                  placeholder={newChatType === 'group' ? 'Masalan: Dasturchilar guruhi' : 'Masalan: Xabarchi News'}
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
                   className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
@@ -243,7 +244,7 @@ export const SidebarHeader: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder={newChatType === 'channel' ? '@xabarchi_news' : '@sardor_dev'}
+                  placeholder={newChatType === 'channel' ? '@xabarchi_news' : '@dev_group'}
                   value={newChatUsername}
                   onChange={(e) => setNewChatUsername(e.target.value)}
                   className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
@@ -253,7 +254,7 @@ export const SidebarHeader: React.FC = () => {
               <div>
                 <label className="block text-white/50 mb-1 font-medium">Tavsif</label>
                 <textarea
-                  placeholder={newChatType === 'channel' ? 'Kanal tavsifi' : 'Qisqa tavsif'}
+                  placeholder={newChatType === 'channel' ? 'Kanal tavsifi' : 'Guruh tavsifi'}
                   value={newChatDescription}
                   onChange={(e) => setNewChatDescription(e.target.value)}
                   className="w-full min-h-24 bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9] resize-none"
@@ -283,20 +284,13 @@ export const SidebarHeader: React.FC = () => {
                 </div>
               )}
 
-              {newChatType === 'channel' && (
-                <div className="flex items-center gap-2 p-3 rounded-2xl bg-[#111111] border border-white/10 text-[11px] text-white/45">
-                  <Megaphone size={14} className="text-white/45" />
-                  Kanalda faqat egasi post tashlaydi. Postlar ostida ko'rishlar soni ko'rinadi.
-                </div>
-              )}
-
               <div className="pt-2">
                 <button
                   type="submit"
                   className="w-full bg-[#229ED9] text-white font-medium py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Plus size={16} />
-                  {newChatType === 'group' ? 'Guruh yaratish' : newChatType === 'channel' ? 'Kanal yaratish' : 'Chat yaratish'}
+                  {newChatType === 'group' ? 'Guruh yaratish' : 'Kanal yaratish'}
                 </button>
               </div>
             </form>

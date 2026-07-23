@@ -1,9 +1,9 @@
 import React from 'react';
-import { X, Bell, BellOff, FileText, Users, Megaphone, Eye, MessageSquare } from 'lucide-react';
+import { X, Bell, BellOff, Users, Megaphone, MessageSquare, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
 export const RightInfoPanel: React.FC = () => {
-  const { chats, activeChatId, messagesMap, isRightPanelOpen, toggleRightPanel, toggleMuteChat } = useStore();
+  const { chats, activeChatId, messagesMap, isRightPanelOpen, toggleRightPanel, toggleMuteChat, deleteChat } = useStore();
 
   const currentChat = chats.find((chat) => chat.id === activeChatId);
   const currentMessages = currentChat ? messagesMap[currentChat.id] || [] : [];
@@ -11,10 +11,17 @@ export const RightInfoPanel: React.FC = () => {
   if (!isRightPanelOpen || !currentChat) return null;
 
   const totalViews = currentMessages.reduce((sum, message) => sum + (message.views || 0), 0);
-  const recentItems = [...currentMessages].slice(-4).reverse();
+
+  const handleDeleteChat = () => {
+    if (!activeChatId) return;
+    if (window.confirm(`"${currentChat.name}" muloqotini va unga tegishli barcha xabarlarni o'chirmoqchimisiz?`)) {
+      toggleRightPanel();
+      void deleteChat(activeChatId);
+    }
+  };
 
   return (
-    <aside className="fixed inset-0 z-40 md:relative md:z-auto w-full md:w-80 h-full bg-[#000000] md:bg-[#000000] border-l border-white/5 flex flex-col shrink-0 select-none">
+    <aside className="fixed inset-0 z-40 md:relative md:z-auto w-full md:w-80 h-full bg-[#000000] border-l border-white/5 flex flex-col shrink-0 select-none">
       <div className="h-16 px-4 border-b border-white/5 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Ma'lumotlar</h3>
         <button
@@ -76,17 +83,10 @@ export const RightInfoPanel: React.FC = () => {
         </div>
 
         <div className="p-3 rounded-2xl bg-[#0B0B0B] border border-white/5 space-y-3 text-xs">
-          {currentChat.type === 'user' && (
-            <div className="flex items-center justify-between py-1">
-              <span className="text-white/40 font-medium">Telefon raqam</span>
-              <span className="text-white font-medium">+998 90 123 45 67</span>
-            </div>
-          )}
-
           {currentChat.type === 'group' && (
             <div className="flex items-center justify-between py-1">
               <span className="text-white/40 font-medium">A'zolar soni</span>
-              <span className="text-white font-medium">{currentChat.membersCount || 25}</span>
+              <span className="text-white font-medium">{currentChat.membersCount || 1}</span>
             </div>
           )}
 
@@ -94,7 +94,7 @@ export const RightInfoPanel: React.FC = () => {
             <>
               <div className="flex items-center justify-between py-1">
                 <span className="text-white/40 font-medium">Obunachilar</span>
-                <span className="text-white font-medium">{currentChat.membersCount || 120}</span>
+                <span className="text-white font-medium">{currentChat.membersCount || 1}</span>
               </div>
               <div className="flex items-center justify-between py-1">
                 <span className="text-white/40 font-medium">Kanal turi</span>
@@ -122,32 +122,14 @@ export const RightInfoPanel: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-[11px] text-white/40 uppercase tracking-wider">
-            <FileText size={12} /> Oxirgi xabarlar / postlar
-          </div>
-
-          {recentItems.length > 0 ? (
-            recentItems.map((message) => (
-              <div key={message.id} className="p-3 rounded-2xl bg-[#0B0B0B] border border-white/5">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <p className="text-xs font-medium text-white truncate">{message.text || 'Media bo‘lmagan post'}</p>
-                  {currentChat.type === 'channel' && typeof message.views === 'number' && (
-                    <span className="flex items-center gap-1 text-[10px] text-white/45 shrink-0">
-                      <Eye size={10} />
-                      {message.views}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] text-white/40">{message.time}</p>
-              </div>
-            ))
-          ) : (
-            <div className="p-4 rounded-2xl bg-[#0B0B0B] border border-white/5 text-xs text-white/40 text-center">
-              Hali hech qanday xabar yo'q
-            </div>
-          )}
-        </div>
+        {currentChat.type !== 'saved' && (
+          <button
+            onClick={handleDeleteChat}
+            className="w-full py-3 px-4 rounded-2xl bg-[#FF3B30]/10 hover:bg-[#FF3B30]/20 text-[#FF3B30] border border-[#FF3B30]/20 font-semibold text-xs flex items-center justify-center gap-2 transition-subtle cursor-pointer mt-4"
+          >
+            <Trash2 size={16} /> Chatni o'chirish
+          </button>
+        )}
       </div>
     </aside>
   );

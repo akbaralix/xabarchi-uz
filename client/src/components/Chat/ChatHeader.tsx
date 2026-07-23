@@ -1,17 +1,38 @@
 import React from 'react';
-import { Phone, Video, Search, PanelRight, Bookmark, ArrowLeft } from 'lucide-react';
+import { Phone, Video, Search, PanelRight, Bookmark, ArrowLeft, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
-export const ChatHeader: React.FC = () => {
-  const { chats, activeChatId, selectChat, toggleRightPanel, isRightPanelOpen } = useStore();
+interface Props {
+  onStartCall?: (isVideo: boolean) => void;
+}
+
+export const ChatHeader: React.FC<Props> = ({ onStartCall }) => {
+  const { chats, activeChatId, selectChat, toggleRightPanel, isRightPanelOpen, user, deleteChat } = useStore();
   const currentChat = chats.find((c) => c.id === activeChatId);
 
   if (!currentChat) return null;
 
+  const handleCallClick = (isVideo: boolean) => {
+    if (user?.allowCalls === false) {
+      alert("Siz sozlamalardan qo'ng'iroqlarni o'chirib qo'ygansiz. Qo'ng'iroq qilish uchun sozlamalarni o'zgartiring.");
+      return;
+    }
+    if (onStartCall) {
+      onStartCall(isVideo);
+    }
+  };
+
+  const handleDeleteChat = () => {
+    if (!activeChatId) return;
+    if (window.confirm(`"${currentChat.name}" muloqotini va unga tegishli barcha xabarlarni o'chirmoqchimisiz?`)) {
+      void deleteChat(activeChatId);
+    }
+  };
+
   const renderSubtitle = () => {
     if (currentChat.type === 'saved') return 'Shaxsiy saqlangan xabarlar';
-    if (currentChat.type === 'group') return `${currentChat.membersCount || 1400} a'zo • guruh`;
-    if (currentChat.type === 'channel') return `${currentChat.membersCount || 25000} obunachi • kanal`;
+    if (currentChat.type === 'group') return `${currentChat.membersCount || 1} a'zo • guruh`;
+    if (currentChat.type === 'channel') return `${currentChat.membersCount || 1} obunachi • kanal`;
     if (currentChat.type === 'bot') return 'bot';
     return currentChat.isOnline ? "online" : "yaqinda bo'lgan";
   };
@@ -20,7 +41,6 @@ export const ChatHeader: React.FC = () => {
     <div className="h-16 px-3 md:px-4 bg-[#000000] border-b border-white/5 flex items-center justify-between shrink-0 select-none z-10">
       {/* Mobile Back Button & User/Group Info */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-        {/* Mobile Back Arrow to Chat List */}
         <button
           onClick={() => selectChat(null)}
           className="md:hidden text-white/70 hover:text-white p-2 rounded-xl active:bg-white/10 transition-subtle shrink-0 cursor-pointer"
@@ -68,18 +88,30 @@ export const ChatHeader: React.FC = () => {
         {currentChat.type === 'user' && (
           <>
             <button
+              onClick={() => handleCallClick(false)}
               className="hidden sm:flex w-9 h-9 rounded-xl items-center justify-center text-white/55 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
-              title="Qo'ng'iroq"
+              title="Audio qo'ng'iroq"
             >
               <Phone size={18} />
             </button>
             <button
+              onClick={() => handleCallClick(true)}
               className="hidden sm:flex w-9 h-9 rounded-xl items-center justify-center text-white/55 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
               title="Video muloqot"
             >
               <Video size={18} />
             </button>
           </>
+        )}
+
+        {currentChat.type !== 'saved' && (
+          <button
+            onClick={handleDeleteChat}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
+            title="Chatni o'chirish"
+          >
+            <Trash2 size={18} />
+          </button>
         )}
 
         <button

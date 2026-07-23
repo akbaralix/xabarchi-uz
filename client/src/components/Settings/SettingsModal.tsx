@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  X, User as UserIcon, Bell, Lock, Palette, Globe, Monitor, Info, LogOut, Check, Camera
+  X, User as UserIcon, Bell, Lock, Palette, Globe, Monitor, Info, LogOut, Check, Camera, PhoneOff, Phone
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { api } from '../../lib/api';
@@ -15,13 +15,21 @@ export const SettingsModal: React.FC = () => {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [username, setUsername] = useState(user?.username || '');
   const [bio, setBio] = useState(user?.bio || '');
+  const [allowCalls, setAllowCalls] = useState(user?.allowCalls !== false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   if (!isSettingsOpen) return null;
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({ firstName, lastName, username, bio });
+    updateProfile({ firstName, lastName, username, bio, allowCalls });
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  const handleToggleCalls = (value: boolean) => {
+    setAllowCalls(value);
+    updateProfile({ allowCalls: value });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
   };
@@ -109,18 +117,17 @@ export const SettingsModal: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-6">
             {saveSuccess && (
               <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
-                <Check size={14} /> Profil ma’lumotlari saqlandi!
+                <Check size={14} /> Sozlamalar saqlandi!
               </div>
             )}
 
             {/* TAB: PROFILE */}
             {activeTab === 'profile' && (
               <form onSubmit={handleSaveProfile} className="space-y-4 max-w-md">
-                {/* Avatar change */}
                 <div className="flex items-center gap-4 mb-6">
                   <div className="relative group">
                     <img
-                      src={user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+                      src={user?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=avatar'}
                       alt="Avatar"
                       className="w-20 h-20 rounded-3xl object-cover border border-white/10"
                     />
@@ -130,7 +137,7 @@ export const SettingsModal: React.FC = () => {
                   </div>
                   <div>
                     <h5 className="text-sm font-semibold text-white">{user?.firstName} {user?.lastName}</h5>
-                    <p className="text-xs text-white/40">{user?.phone}</p>
+                    <p className="text-xs text-[#229ED9]">@{user?.username}</p>
                   </div>
                 </div>
 
@@ -210,19 +217,30 @@ export const SettingsModal: React.FC = () => {
             {/* TAB: PRIVACY */}
             {activeTab === 'privacy' && (
               <div className="space-y-4 max-w-md text-xs">
-                <div className="p-3 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
+                {/* Qo'ng'iroq qilishni o'chirib qo'yish sozlamasi */}
+                <div className="p-3.5 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {allowCalls ? <Phone size={18} className="text-[#229ED9]" /> : <PhoneOff size={18} className="text-[#FF3B30]" />}
+                    <div>
+                      <p className="font-semibold text-white">Audio va Video Qo'ng'iroqlar</p>
+                      <p className="text-white/40">{allowCalls ? "Barcha foydalanuvchilar sizga qo'ng'iroq qila oladi" : "Qo'ng'iroqlar o'chirilgan (Hech kim qo'ng'iroq qila olmaydi)"}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleCalls(!allowCalls)}
+                    className={`w-12 h-7 rounded-full border transition-subtle relative cursor-pointer ${allowCalls ? 'bg-[#229ED9] border-[#229ED9]' : 'bg-white/10 border-white/10'}`}
+                  >
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${allowCalls ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-white">Oxirgi marta ko'ringan vaqt</p>
                     <p className="text-white/40">Barchaga ruxsat berilgan</p>
                   </div>
                   <span className="text-[#229ED9] font-medium cursor-pointer">Barchaga</span>
-                </div>
-                <div className="p-3 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-white">2-bosqichli tasdiqlash (2FA)</p>
-                    <p className="text-emerald-400 font-medium">Yoqilgan ✅</p>
-                  </div>
-                  <span className="text-white/50 cursor-pointer">Sozlash</span>
                 </div>
               </div>
             )}
@@ -247,10 +265,10 @@ export const SettingsModal: React.FC = () => {
               <div className="space-y-3 max-w-md text-xs">
                 <div className="p-3 rounded-xl bg-[#111111] border border-white/5">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold text-white">Chrome macOS (Ushbu qurilma)</p>
+                    <p className="font-semibold text-white">Xabarchi Web (Ushbu brauzer)</p>
                     <span className="text-emerald-400 font-bold text-[10px]">FAOL</span>
                   </div>
-                  <p className="text-white/40">Toshkent, O‘zbekiston • IP: 213.230.70.12</p>
+                  <p className="text-white/40">Toshkent, O‘zbekiston</p>
                 </div>
               </div>
             )}

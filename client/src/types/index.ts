@@ -7,6 +7,7 @@ export interface User {
   bio?: string;
   avatarUrl?: string;
   isOnline?: boolean;
+  allowCalls?: boolean;
   lastSeen?: string;
 }
 
@@ -30,6 +31,7 @@ export interface Chat {
   description?: string;
   username?: string;
   isPublic?: boolean;
+  ownerId?: string;
 }
 
 export interface MediaAttachment {
@@ -61,4 +63,15 @@ export interface Message {
   views?: number;
   isEdited?: boolean;
   editedAt?: string;
+}
+
+export interface CallData {
+  callId: string;
+  targetUserId: string;
+  callerId: string;
+  callerName: string;
+  callerAvatar?: string;
+  isVideo: boolean;
+  status: 'idle' | 'calling' | 'incoming' | 'connected' | 'ended';
+  signalData?: any;
 }

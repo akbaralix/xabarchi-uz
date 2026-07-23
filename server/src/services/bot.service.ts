@@ -1,10 +1,12 @@
 import TelegramBot from 'node-telegram-bot-api';
+import crypto from 'crypto';
 import { config } from '../config/index.js';
 import { UserModel } from '../models/User.js';
+import { logger } from '../config/logger.js';
 
 interface PendingAuth {
   code: string;
-  user?: any;
+  userId?: string;
   status: 'pending' | 'authenticated';
   createdAt: number;
 }
@@ -19,21 +21,21 @@ class BotAuthService {
 
   private initBot() {
     if (!config.telegramBotEnabled) {
-      console.warn('[Telegram Bot Service] TELEGRAM_BOT_ENABLED false, bot polling o\'chirildi.');
+      logger.warn('[Telegram Bot Service] TELEGRAM_BOT_ENABLED false, bot polling o\'chirildi.');
       return;
     }
 
     if (!config.telegramBotToken) {
-      console.warn('[Telegram Bot Service] TELEGRAM_BOT_TOKEN kiritilmagan.');
+      logger.warn('[Telegram Bot Service] TELEGRAM_BOT_TOKEN kiritilmagan.');
       return;
     }
 
     try {
       this.bot = new TelegramBot(config.telegramBotToken, { polling: true });
-      console.log('[Telegram Bot Service] Bot polling muvaffaqiyatli ishga tushdi! 🤖');
+      logger.info('[Telegram Bot Service] Bot polling muvaffaqiyatli ishga tushdi! 🤖');
 
       this.bot.on('polling_error', (error) => {
-        console.warn('[Telegram Bot Polling Warning]:', error.message || error);
+        logger.warn(`[Telegram Bot Polling Warning]: ${error.message || error}`);
       });
 
       this.bot.on('message', async (msg) => {
@@ -42,7 +44,6 @@ class BotAuthService {
         const tgUser = msg.from;
         if (!tgUser || !text) return;
 
-        // Extract any 6-digit code or text after /start
         const codeMatch = text.match(/\b\d{6}\b/);
         const code = codeMatch ? codeMatch[0] : (text.startsWith('/start ') ? text.replace('/start ', '').trim() : '');
 
@@ -57,7 +58,7 @@ class BotAuthService {
           return;
         }
 
-        console.log(`[Telegram Bot Auth] Code received: ${code} from User: ${tgUser.first_name} (@${tgUser.username})`);
+        logger.info(`[Telegram Bot Auth] Code received: ${code} from User: ${tgUser.first_name} (@${tgUser.username})`);
 
         let avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}`;
         try {
@@ -70,57 +71,35 @@ class BotAuthService {
             }
           }
         } catch (error) {
-          console.warn('[Telegram Bot Avatar Fetch Error]:', error);
+          logger.warn(`[Telegram Bot Avatar Fetch Error]: ${error}`);
         }
 
-        let dbUser = null;
-        try {
-          dbUser = await UserModel.findOneAndUpdate(
-            { telegramId: String(tgUser.id) },
-            {
-              telegramId: String(tgUser.id),
-              firstName: tgUser.first_name,
-              lastName: tgUser.last_name || '',
-              username: tgUser.username || `tg_${tgUser.id}`,
-              avatarUrl,
-              isOnline: true
-            },
-            { upsert: true, new: true }
-          );
-        } catch (dbErr) {
-          console.warn('[MongoDB Atlas User Save Warning]:', dbErr);
-        }
+        let dbUser = await UserModel.findOneAndUpdate(
+          { telegramId: String(tgUser.id) },
+          {
+            telegramId: String(tgUser.id),
+            firstName: tgUser.first_name,
+            lastName: tgUser.last_name || '',
+            username: tgUser.username || `tg_${tgUser.id}`,
+            avatarUrl,
+            isOnline: true,
+            allowCalls: true
+          },
+          { upsert: true, new: true }
+        );
 
-        const userData = dbUser ? {
-          id: dbUser._id.toString(),
-          telegramId: dbUser.telegramId,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          username: dbUser.username,
-          avatarUrl: dbUser.avatarUrl,
-          bio: 'Telegram Bot orqali kirdi 🚀'
-        } : {
-          id: 'usr_tg_' + tgUser.id,
-          telegramId: String(tgUser.id),
-          firstName: tgUser.first_name,
-          lastName: tgUser.last_name || '',
-          username: tgUser.username || `tg_${tgUser.id}`,
-          avatarUrl,
-          bio: 'Telegram Bot orqali kirdi 🚀'
-        };
-
-        this.authenticateSession(code, userData);
+        this.authenticateSession(code, dbUser._id.toString());
 
         const welcomeMessage = `<b>Xabarchi Web</b> ilovasiga xush kelibsiz, <b>${tgUser.first_name}</b>! 🚀\n\nSiz muvaffaqiyatli avtorizatsiyadan o'tdingiz. Brauzeringiz avtomatik ravishda ilovaga kiradi.`;
         await this.bot?.sendMessage(chatId, welcomeMessage, { parse_mode: 'HTML' });
       });
     } catch (error) {
-      console.error('[Telegram Bot Initialization Error]:', error);
+      logger.error(`[Telegram Bot Initialization Error]: ${error}`);
     }
   }
 
   createAuthSession(): string {
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 999999));
     this.pendingAuths.set(code, {
       code,
       status: 'pending',
@@ -129,13 +108,13 @@ class BotAuthService {
     return code;
   }
 
-  authenticateSession(code: string, user: PendingAuth['user']): PendingAuth {
+  authenticateSession(code: string, userId: string): PendingAuth {
     const cleanCode = code.trim();
     const existing = this.pendingAuths.get(cleanCode);
 
     const authenticatedSession: PendingAuth = {
       code: cleanCode,
-      user,
+      userId,
       status: 'authenticated',
       createdAt: existing ? existing.createdAt : Date.now()
     };

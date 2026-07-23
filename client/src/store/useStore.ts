@@ -34,6 +34,7 @@ interface AppState {
   togglePinChat: (chatId: string) => void;
   toggleMuteChat: (chatId: string) => void;
   markAsRead: (chatId: string) => void;
+  deleteChat: (chatId: string) => Promise<void>;
 
   // Messages state
   messagesMap: Record<string, Message[]>;
@@ -319,6 +320,31 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       chats: state.chats.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c))
     }));
+  },
+
+  deleteChat: async (chatId: string) => {
+    try {
+      await api.delete(`/api/chats/${chatId}`);
+    } catch {
+      // Optimistic delete
+    }
+
+    set((state) => {
+      const nextChats = state.chats.filter((c) => c.id !== chatId);
+      const nextMap = { ...state.messagesMap };
+      delete nextMap[chatId];
+
+      const savedChat = nextChats.find((c) => c.type === 'saved');
+      const nextActiveId = state.activeChatId === chatId
+        ? (savedChat ? savedChat.id : (nextChats[0]?.id || null))
+        : state.activeChatId;
+
+      return {
+        chats: nextChats,
+        messagesMap: nextMap,
+        activeChatId: nextActiveId
+      };
+    });
   },
 
   messagesMap: {},

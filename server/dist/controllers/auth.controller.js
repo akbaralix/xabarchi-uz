@@ -5,248 +5,268 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.updateProfile = exports.logout = exports.getMe = exports.verifyCode = exports.sendCode = exports.googleLogin = exports.checkTelegramAuth = exports.initTelegramAuth = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const zod_1 = require("zod");
 const index_js_1 = require("../config/index.js");
 const bot_service_js_1 = require("../services/bot.service.js");
 const User_js_1 = require("../models/User.js");
 const AUTH_COOKIE_NAME = 'xabarchi_auth';
-const AUTH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
-const cookieOptions = {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    maxAge: AUTH_COOKIE_MAX_AGE,
+const REFRESH_COOKIE_NAME = 'xabarchi_refresh';
+const AUTH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+const signAccessToken = (userId) => {
+    return jsonwebtoken_1.default.sign({ userId, type: 'access' }, index_js_1.config.jwtSecret, { expiresIn: '7d' });
 };
-const setAuthCookie = (res, token) => {
-    res.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
+const signRefreshToken = (userId) => {
+    return jsonwebtoken_1.default.sign({ userId, type: 'refresh' }, index_js_1.config.jwtSecret, { expiresIn: '30d' });
 };
-const clearAuthCookie = (res) => {
-    res.clearCookie(AUTH_COOKIE_NAME, {
-        ...cookieOptions,
-        maxAge: undefined,
-    });
-};
-const signAuthToken = (user) => {
-    const payload = {
-        userId: user.id,
-        user,
+const setAuthCookies = (res, accessToken, refreshToken) => {
+    const cookieOptions = {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: AUTH_COOKIE_MAX_AGE,
     };
-    return jsonwebtoken_1.default.sign(payload, index_js_1.config.jwtSecret, { expiresIn: '30d' });
+    res.cookie(AUTH_COOKIE_NAME, accessToken, cookieOptions);
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, cookieOptions);
 };
-const getTokenFromRequest = (req) => {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        const bearerToken = authHeader.substring(7).trim();
-        if (bearerToken)
-            return bearerToken;
-    }
-    const rawCookie = req.headers.cookie;
-    if (!rawCookie)
-        return null;
-    const found = rawCookie
-        .split(';')
-        .map((entry) => entry.trim())
-        .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
-    if (!found)
-        return null;
-    return decodeURIComponent(found.split('=').slice(1).join('='));
-};
-const getAuthUserFromToken = (req) => {
-    const token = getTokenFromRequest(req);
-    if (!token)
-        return null;
+const serializeUser = (user) => ({
+    id: user._id.toString(),
+    firstName: user.firstName,
+    lastName: user.lastName || '',
+    username: user.username || `user_${user._id.toString().substring(0, 6)}`,
+    phone: user.phone || '',
+    avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user._id.toString()}`,
+    bio: user.bio || '',
+    isOnline: user.isOnline !== false,
+    allowCalls: user.allowCalls !== false
+});
+const initTelegramAuth = async (_req, res, next) => {
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, index_js_1.config.jwtSecret);
-        return decoded.user || null;
-    }
-    catch {
-        return null;
-    }
-};
-const buildAuthResponse = (res, user, message) => {
-    const token = signAuthToken(user);
-    setAuthCookie(res, token);
-    res.json({
-        success: true,
-        message,
-        token,
-        user,
-    });
-};
-const initTelegramAuth = async (req, res) => {
-    const code = bot_service_js_1.botAuthService.createAuthSession();
-    const botUsername = index_js_1.config.telegramBotUsername || 'XabarchiAuthBot';
-    const botUrl = `https://t.me/${botUsername}?start=${code}`;
-    res.json({
-        success: true,
-        code,
-        botUrl,
-        message: "Telegram bot auth mashg'uloti yaratildi",
-    });
-};
-exports.initTelegramAuth = initTelegramAuth;
-const checkTelegramAuth = async (req, res) => {
-    const { code } = req.params;
-    const cleanCode = code ? code.trim() : '';
-    const session = bot_service_js_1.botAuthService.checkAuthSession(cleanCode);
-    if (session && session.status === 'authenticated' && session.user) {
-        const user = session.user;
-        const token = signAuthToken(user);
-        setAuthCookie(res, token);
+        const code = bot_service_js_1.botAuthService.createAuthSession();
+        const botUsername = index_js_1.config.telegramBotUsername || 'XabarchiAuthBot';
+        const botUrl = `https://t.me/${botUsername}?start=${code}`;
         res.json({
             success: true,
-            status: 'authenticated',
-            token,
-            user,
+            code,
+            botUrl,
+            message: "Telegram bot auth sessiyasi yaratildi",
         });
-        return;
-    }
-    res.json({
-        success: true,
-        status: 'pending',
-        message: 'Kutilmoqda...',
-    });
-};
-exports.checkTelegramAuth = checkTelegramAuth;
-const googleLogin = async (req, res) => {
-    try {
-        const { googleId, email, name, picture } = req.body;
-        if (!email || !name) {
-            res.status(400).json({ success: false, message: "Google hisobi ma'lumotlari to'liq emas" });
-            return;
-        }
-        let user = null;
-        try {
-            user = await User_js_1.UserModel.findOne({ googleId: googleId || email });
-            if (!user) {
-                user = await User_js_1.UserModel.create({
-                    googleId: googleId || email,
-                    firstName: name.split(' ')[0] || name,
-                    lastName: name.split(' ').slice(1).join(' ') || '',
-                    username: email.split('@')[0],
-                    phone: email,
-                    avatarUrl: picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-                    bio: 'Google hisobi orqali tizimga kirdi',
-                    isOnline: true,
-                });
-            }
-        }
-        catch (dbErr) {
-            console.warn('[MongoDB Google Auth Warning]:', dbErr);
-        }
-        const userData = user ? {
-            id: user._id.toString(),
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username || email.split('@')[0],
-            phone: user.phone || email,
-            avatarUrl: user.avatarUrl || picture,
-            bio: user.bio || 'Google hisobi orqali tizimga kirdi',
-        } : {
-            id: 'usr_gg_' + Date.now(),
-            firstName: name.split(' ')[0] || name,
-            lastName: name.split(' ').slice(1).join(' ') || '',
-            username: email.split('@')[0],
-            phone: email,
-            avatarUrl: picture,
-            bio: 'Google hisobi orqali tizimga kirdi',
-        };
-        buildAuthResponse(res, userData, 'Google hisobi orqali muvaffaqiyatli kirildi!');
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        next(error);
+    }
+};
+exports.initTelegramAuth = initTelegramAuth;
+const checkTelegramAuth = async (req, res, next) => {
+    try {
+        const { code } = req.params;
+        const cleanCode = code ? code.trim() : '';
+        const session = bot_service_js_1.botAuthService.checkAuthSession(cleanCode);
+        if (session && session.status === 'authenticated' && session.userId) {
+            const user = await User_js_1.UserModel.findById(session.userId);
+            if (!user) {
+                res.status(404).json({ success: false, message: 'Foydalanuvchi topilmadi' });
+                return;
+            }
+            const accessToken = signAccessToken(user._id.toString());
+            const refreshToken = signRefreshToken(user._id.toString());
+            user.refreshToken = refreshToken;
+            await user.save();
+            setAuthCookies(res, accessToken, refreshToken);
+            res.json({
+                success: true,
+                status: 'authenticated',
+                token: accessToken,
+                refreshToken,
+                user: serializeUser(user),
+            });
+            return;
+        }
+        res.json({
+            success: true,
+            status: 'pending',
+            message: 'Kutilmoqda...',
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.checkTelegramAuth = checkTelegramAuth;
+const GoogleAuthSchema = zod_1.z.object({
+    googleId: zod_1.z.string().min(1, 'Google ID majburiy'),
+    email: zod_1.z.string().email('Noto\'g\'ri email formati'),
+    name: zod_1.z.string().min(1, 'Ism majburiy'),
+    picture: zod_1.z.string().optional()
+});
+const googleLogin = async (req, res, next) => {
+    try {
+        const parsed = GoogleAuthSchema.parse(req.body);
+        const { googleId, email, name, picture } = parsed;
+        let user = await User_js_1.UserModel.findOne({
+            $or: [{ googleId }, { phone: email }]
+        });
+        if (!user) {
+            const nameParts = name.trim().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ') || '';
+            const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '');
+            user = await User_js_1.UserModel.create({
+                googleId,
+                firstName,
+                lastName,
+                username: baseUsername,
+                phone: email,
+                avatarUrl: picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+                bio: 'Google hisobi orqali tizimga kirdi ✨',
+                isOnline: true,
+                allowCalls: true
+            });
+        }
+        else {
+            user.isOnline = true;
+            if (picture && !user.avatarUrl)
+                user.avatarUrl = picture;
+            await user.save();
+        }
+        const accessToken = signAccessToken(user._id.toString());
+        const refreshToken = signRefreshToken(user._id.toString());
+        user.refreshToken = refreshToken;
+        await user.save();
+        setAuthCookies(res, accessToken, refreshToken);
+        res.json({
+            success: true,
+            message: 'Google hisobi orqali muvaffaqiyatli kirildi',
+            token: accessToken,
+            refreshToken,
+            user: serializeUser(user)
+        });
+    }
+    catch (error) {
+        next(error);
     }
 };
 exports.googleLogin = googleLogin;
-const sendCode = async (req, res) => {
-    const { phoneNumber } = req.body;
-    if (!phoneNumber) {
-        res.status(400).json({ success: false, message: 'Telefon raqami kiritilmadi' });
-        return;
-    }
-    res.json({
-        success: true,
-        message: 'SMS kod muvaffaqiyatli yuborildi',
-        phoneCodeHash: 'hash_' + Math.random().toString(36).substring(7),
-    });
-};
-exports.sendCode = sendCode;
-const verifyCode = async (req, res) => {
-    const { phoneNumber, code } = req.body;
-    if (!phoneNumber || !code) {
-        res.status(400).json({ success: false, message: 'Telefon va SMS kod majburiy' });
-        return;
-    }
-    const userData = {
-        id: 'usr_' + Date.now(),
-        firstName: 'Foydalanuvchi',
-        username: 'user_phone',
-        phone: phoneNumber,
-        bio: 'Telefon raqam orqali kirildi',
-        avatarUrl: '',
-    };
-    buildAuthResponse(res, userData, 'Tizimga muvaffaqiyatli kirildi');
-};
-exports.verifyCode = verifyCode;
-const getMe = async (req, res) => {
-    const user = getAuthUserFromToken(req);
-    if (!user) {
-        res.status(401).json({ success: false, message: 'Kirish talab qilinadi' });
-        return;
-    }
-    res.json({ success: true, user });
-};
-exports.getMe = getMe;
-const logout = async (_req, res) => {
-    clearAuthCookie(res);
-    res.json({ success: true, message: 'Tizimdan chiqildi' });
-};
-exports.logout = logout;
-const updateProfile = async (req, res) => {
+const PhoneAuthSchema = zod_1.z.object({
+    phoneNumber: zod_1.z.string().min(7, 'Telefon raqam noto\'g\'ri')
+});
+const sendCode = async (req, res, next) => {
     try {
-        const authUser = getAuthUserFromToken(req);
-        if (!authUser) {
-            res.status(401).json({ success: false, message: 'Kirish talab qilinadi' });
-            return;
-        }
-        const { firstName, lastName, username, bio, avatarUrl } = req.body;
-        let updatedUser = {
-            ...authUser,
-            firstName: firstName || authUser.firstName,
-            lastName: lastName !== undefined ? lastName : authUser.lastName,
-            username: username || authUser.username,
-            bio: bio !== undefined ? bio : authUser.bio,
-            avatarUrl: avatarUrl || authUser.avatarUrl,
-        };
-        try {
-            const dbUser = await User_js_1.UserModel.findByIdAndUpdate(authUser.id, {
-                firstName: updatedUser.firstName,
-                lastName: updatedUser.lastName,
-                username: updatedUser.username,
-                bio: updatedUser.bio,
-                avatarUrl: updatedUser.avatarUrl,
-            }, { new: true });
-            if (dbUser) {
-                updatedUser = {
-                    id: dbUser._id.toString(),
-                    firstName: dbUser.firstName,
-                    lastName: dbUser.lastName,
-                    username: dbUser.username || updatedUser.username,
-                    phone: dbUser.phone || updatedUser.phone,
-                    avatarUrl: dbUser.avatarUrl,
-                    bio: dbUser.bio,
-                };
-            }
-        }
-        catch (dbErr) {
-            console.warn('[MongoDB Update Profile Warning]:', dbErr);
-        }
-        const token = signAuthToken(updatedUser);
-        setAuthCookie(res, token);
-        res.json({ success: true, user: updatedUser, message: 'Profil muvaffaqiyatli yangilandi' });
+        const { phoneNumber } = PhoneAuthSchema.parse(req.body);
+        res.json({
+            success: true,
+            message: 'OTP tasdiqlash kodi telefoningizga yuborildi',
+            phoneNumber
+        });
     }
     catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        next(error);
+    }
+};
+exports.sendCode = sendCode;
+const VerifyCodeSchema = zod_1.z.object({
+    phoneNumber: zod_1.z.string().min(7, 'Telefon raqam noto\'g\'ri'),
+    code: zod_1.z.string().min(4, 'Kod kamida 4 xonali bo\'lishi kerak'),
+    firstName: zod_1.z.string().optional()
+});
+const verifyCode = async (req, res, next) => {
+    try {
+        const { phoneNumber, code, firstName } = VerifyCodeSchema.parse(req.body);
+        let user = await User_js_1.UserModel.findOne({ phone: phoneNumber });
+        if (!user) {
+            const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+            user = await User_js_1.UserModel.create({
+                phone: phoneNumber,
+                firstName: firstName || `Foydalanuvchi_${cleanPhone.slice(-4)}`,
+                username: `user_${cleanPhone.slice(-6)}`,
+                bio: 'Telefon raqam orqali kirdi',
+                isOnline: true,
+                allowCalls: true
+            });
+        }
+        else {
+            user.isOnline = true;
+            await user.save();
+        }
+        const accessToken = signAccessToken(user._id.toString());
+        const refreshToken = signRefreshToken(user._id.toString());
+        user.refreshToken = refreshToken;
+        await user.save();
+        setAuthCookies(res, accessToken, refreshToken);
+        res.json({
+            success: true,
+            message: 'Tizimga muvaffaqiyatli kirildi',
+            token: accessToken,
+            refreshToken,
+            user: serializeUser(user)
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.verifyCode = verifyCode;
+const getMe = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+            return;
+        }
+        res.json({ success: true, user: serializeUser(req.user) });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.getMe = getMe;
+const logout = async (req, res, next) => {
+    try {
+        if (req.user) {
+            req.user.isOnline = false;
+            req.user.refreshToken = undefined;
+            await req.user.save();
+        }
+        res.clearCookie(AUTH_COOKIE_NAME, { path: '/' });
+        res.clearCookie(REFRESH_COOKIE_NAME, { path: '/' });
+        res.json({ success: true, message: 'Tizimdan chiqildi' });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.logout = logout;
+const UpdateProfileSchema = zod_1.z.object({
+    firstName: zod_1.z.string().min(1).optional(),
+    lastName: zod_1.z.string().optional(),
+    username: zod_1.z.string().min(3).max(32).optional(),
+    bio: zod_1.z.string().max(200).optional(),
+    avatarUrl: zod_1.z.string().optional(),
+    allowCalls: zod_1.z.boolean().optional()
+});
+const updateProfile = async (req, res, next) => {
+    try {
+        if (!req.user) {
+            res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+            return;
+        }
+        const updates = UpdateProfileSchema.parse(req.body);
+        if (updates.username && updates.username !== req.user.username) {
+            const existing = await User_js_1.UserModel.findOne({ username: updates.username });
+            if (existing) {
+                res.status(400).json({ success: false, message: 'Ushbu username band' });
+                return;
+            }
+        }
+        Object.assign(req.user, updates);
+        await req.user.save();
+        res.json({
+            success: true,
+            message: 'Profil muvaffaqiyatli yangilandi',
+            user: serializeUser(req.user)
+        });
+    }
+    catch (error) {
+        next(error);
     }
 };
 exports.updateProfile = updateProfile;

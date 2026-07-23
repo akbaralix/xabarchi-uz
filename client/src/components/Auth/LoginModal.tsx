@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { signInWithPopup } from "firebase/auth";
 import {
   Send,
   Phone,
@@ -12,6 +13,8 @@ import {
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { api } from "../../lib/api";
+import { auth, googleProvider } from "../../firebase";
+import logoImg from "../../assets/xabarchi.png";
 
 export const LoginModal: React.FC = () => {
   const { login } = useStore();
@@ -48,10 +51,15 @@ export const LoginModal: React.FC = () => {
         setAuthMethod("telegram_bot");
         window.open(res.data.botUrl, "_blank");
       } else {
-        setError(res.data.message || "Telegram bot ulanishda xatolik yuz berdi");
+        setError(
+          res.data.message || "Telegram bot ulanishda xatolik yuz berdi",
+        );
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Server bilan ulanishda xatolik. Qayta urinib ko'ring.");
+      setError(
+        err?.response?.data?.message ||
+          "Server bilan ulanishda xatolik. Qayta urinib ko'ring.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -83,14 +91,19 @@ export const LoginModal: React.FC = () => {
     };
   }, [isWaitingBot, botAuthCode, login]);
 
+  // Real Firebase Authentication Google Login
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     setError("");
     try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const googleUser = result.user;
+
       const res = await api.post("/api/auth/google", {
-        googleId: "g_" + Date.now(),
-        email: "user@gmail.com",
-        name: "Google Foydalanuvchisi",
+        googleId: googleUser.uid,
+        email: googleUser.email,
+        name: googleUser.displayName || googleUser.email?.split('@')[0] || "Google Foydalanuvchisi",
+        picture: googleUser.photoURL
       });
 
       if (res.data.success && res.data.user) {
@@ -98,9 +111,15 @@ export const LoginModal: React.FC = () => {
           localStorage.setItem("xabarchi_token", res.data.token);
         }
         login(res.data.user);
+      } else {
+        setError(res.data.message || "Google tizimiga kirishda xatolik");
       }
-    } catch {
-      setError("Google orqali kirish vaqtincha ishlamadi");
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError("Google oyna yopildi");
+      } else {
+        setError(err.message || "Google Authentication xatoligi yuz berdi");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -118,8 +137,8 @@ export const LoginModal: React.FC = () => {
     try {
       await api.post("/api/auth/send-code", { phoneNumber: fullPhoneNumber });
       setStep("otp");
-    } catch {
-      setError("Telefon raqamga kod yuborilmadi");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Telefon raqamga kod yuborilmadi");
     } finally {
       setIsLoading(false);
     }
@@ -139,25 +158,16 @@ export const LoginModal: React.FC = () => {
   const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const code = otpCode.join("");
-    if (code.length < 5) {
-      setError("5 xonali tasdiqlash kodini to" + "'" + "liq kiriting");
+    if (code.length < 4) {
+      setError("Tasdiqlash kodini to'liq kiriting");
       return;
     }
     setError("");
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setStep("2fa");
-    }, 500);
+    setStep("2fa");
   };
 
   const handle2FASubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password2FA) {
-      setError("2-bosqichli parolni kiriting");
-      return;
-    }
-
     setIsLoading(true);
     setError("");
     try {
@@ -167,10 +177,15 @@ export const LoginModal: React.FC = () => {
       });
 
       if (res.data.success && res.data.user) {
+        if (res.data.token) {
+          localStorage.setItem("xabarchi_token", res.data.token);
+        }
         login(res.data.user);
+      } else {
+        setError(res.data.message || "Kirishda xatolik");
       }
-    } catch {
-      setError("Telefon orqali kirish vaqtincha ishlamadi");
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Telefon orqali kirishda xatolik");
     } finally {
       setIsLoading(false);
     }
@@ -186,8 +201,12 @@ export const LoginModal: React.FC = () => {
         className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden"
       >
         <div className="flex flex-col items-center mb-6">
-          <div className="w-28 h-28  flex items-center justify-center mb-3 ">
-            <img src="/src/assets/xabarchi.png" alt="" />
+          <div className="w-28 h-28 flex items-center justify-center mb-3">
+            <img
+              src={logoImg}
+              alt="Xabarchi"
+              className="w-full h-full object-contain"
+            />
           </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">
             Xabarchi Web
@@ -227,7 +246,7 @@ export const LoginModal: React.FC = () => {
                         className="text-white transform -rotate-12"
                       />
                     </div>
-                    <span>Telegram orqali kirish</span>
+                    <span>Telegram Bot orqali kirish</span>
                   </>
                 )}
               </button>
@@ -237,7 +256,7 @@ export const LoginModal: React.FC = () => {
                 disabled={isLoading}
                 className="w-full bg-[#111111] hover:bg-white/10 text-white font-medium text-sm py-3.5 px-4 rounded-2xl border border-white/10 transition-subtle flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
               >
-                Google orqali kirish
+                {isLoading ? "Yuklanmoqda..." : "Google Firebase Auth orqali kirish"}
               </button>
 
               <div className="relative py-2 flex items-center justify-center">
@@ -403,7 +422,7 @@ export const LoginModal: React.FC = () => {
                 <form onSubmit={handle2FASubmit} className="space-y-4">
                   <input
                     type="password"
-                    placeholder="2FA parolingiz"
+                    placeholder="2FA parolingiz (ixtiyoriy)"
                     value={password2FA}
                     onChange={(e) => setPassword2FA(e.target.value)}
                     className="w-full bg-[#111111] border border-white/10 text-white text-xs rounded-xl px-3 py-3 outline-none"

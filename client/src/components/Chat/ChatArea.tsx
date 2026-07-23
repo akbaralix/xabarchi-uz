@@ -1,14 +1,19 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { ChatHeader } from './ChatHeader';
 import { PinnedMessageBar } from './PinnedMessageBar';
 import { MessageItem } from './MessageItem';
 import { MessageComposer } from './MessageComposer';
+import { CallModal } from '../Call/CallModal';
 import { useStore } from '../../store/useStore';
+import { socket } from '../../lib/socket';
+import type { CallData } from '../../types';
 import { MessageSquare } from 'lucide-react';
 
 export const ChatArea: React.FC = () => {
-  const { activeChatId, chats, messagesMap, pinMessage } = useStore();
+  const { activeChatId, chats, messagesMap, pinMessage, user } = useStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [activeCall, setActiveCall] = useState<CallData | null>(null);
 
   const currentChat = chats.find((c) => c.id === activeChatId);
   const messages = activeChatId ? messagesMap[activeChatId] || [] : [];
@@ -18,6 +23,43 @@ export const ChatArea: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, activeChatId]);
+
+  // Listen for incoming call events on socket
+  useEffect(() => {
+    socket.on('incomingCall', (data: { callerId: string; callerName: string; callerAvatar?: string; isVideo: boolean; signalData: any }) => {
+      if (user?.allowCalls === false) {
+        socket.emit('rejectCall', { targetUserId: data.callerId });
+        return;
+      }
+      setActiveCall({
+        callId: `call_${Date.now()}`,
+        targetUserId: user?.id || '',
+        callerId: data.callerId,
+        callerName: data.callerName,
+        callerAvatar: data.callerAvatar,
+        isVideo: data.isVideo,
+        status: 'incoming',
+        signalData: data.signalData
+      });
+    });
+
+    return () => {
+      socket.off('incomingCall');
+    };
+  }, [user]);
+
+  const handleStartCall = (isVideo: boolean) => {
+    if (!currentChat) return;
+    setActiveCall({
+      callId: `call_${Date.now()}`,
+      targetUserId: currentChat.id,
+      callerId: user?.id || '',
+      callerName: currentChat.name,
+      callerAvatar: currentChat.avatar,
+      isVideo,
+      status: 'calling'
+    });
+  };
 
   if (!currentChat) {
     return (
@@ -35,7 +77,7 @@ export const ChatArea: React.FC = () => {
 
   return (
     <main className="flex-1 h-full bg-[#000000] flex flex-col min-w-0 relative">
-      <ChatHeader />
+      <ChatHeader onStartCall={handleStartCall} />
       {pinnedMessage && (
         <PinnedMessageBar
           pinnedMessage={pinnedMessage}
@@ -45,7 +87,6 @@ export const ChatArea: React.FC = () => {
 
       {/* Messages Stream */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        {/* Date separator */}
         <div className="flex justify-center my-3 select-none">
           <span className="px-3 py-1 bg-[#0B0B0B] border border-white/5 text-[11px] font-medium text-white/50 rounded-full">
             Bugun
@@ -60,6 +101,11 @@ export const ChatArea: React.FC = () => {
       </div>
 
       <MessageComposer />
+
+      {/* WebRTC Call Modal */}
+      {activeCall && (
+        <CallModal activeCall={activeCall} onEndCall={() => setActiveCall(null)} />
+      )}
     </main>
   );
 };

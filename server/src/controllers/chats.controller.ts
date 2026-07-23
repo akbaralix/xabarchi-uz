@@ -1,134 +1,97 @@
-import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import { config } from '../config/index.js';
-import { ChatModel } from '../models/Chat.js';
+import { Response, NextFunction } from 'express';
+import { z } from 'zod';
+import { ChatModel, IChat } from '../models/Chat.js';
 import { UserModel } from '../models/User.js';
-
-type AuthUser = {
-  id: string;
-  firstName: string;
-  lastName?: string;
-  username: string;
-  phone: string;
-  avatarUrl?: string;
-  bio?: string;
-};
-
-type AuthTokenPayload = {
-  userId: string;
-  user: AuthUser;
-};
-
-const AUTH_COOKIE_NAME = 'xabarchi_auth';
+import { MessageModel } from '../models/Message.js';
+import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 
 const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toLowerCase();
+const isValidUsername = (value: string) => /^[a-z0-9_]{3,32}$/.test(value);
 
-const isValidUsername = (value: string) => /^[a-z0-9_]{5,32}$/.test(value);
-
-const getAuthUserFromRequest = (req: Request): AuthUser | null => {
-  const authHeader = req.headers.authorization;
-  let token: string | null = null;
-
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  }
-
-  if (!token && req.headers.cookie) {
-    const cookieValue = req.headers.cookie
-      .split(';')
-      .map((entry) => entry.trim())
-      .find((entry) => entry.startsWith(`${AUTH_COOKIE_NAME}=`));
-
-    if (cookieValue) {
-      token = decodeURIComponent(cookieValue.split('=').slice(1).join('='));
-    }
-  }
-
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, config.jwtSecret) as AuthTokenPayload;
-    return decoded.user || null;
-  } catch {
-    return null;
-  }
-};
-
-const serializeChat = (chat: any, viewerId?: string | null) => {
-  const members = Array.isArray(chat.members) ? chat.members.map((member: any) => member.toString()) : [];
-  const membersCount = members.length;
+const serializeChat = (chat: IChat, viewerId?: string) => {
+  const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
   const viewerJoined = viewerId ? members.includes(viewerId) : false;
 
   return {
-    id: chat._id?.toString?.() || chat.id || `chat_${Date.now()}`,
+    id: chat._id.toString(),
     name: chat.name,
     type: chat.type,
-    avatar: chat.avatar,
-    lastMessage: chat.lastMessage,
-    time: chat.time,
+    avatar: chat.avatar || '',
+    lastMessage: chat.lastMessage || '',
+    time: chat.time || '',
     unreadCount: chat.unreadCount ?? 0,
     isPinned: Boolean(chat.isPinned),
     isMuted: Boolean(chat.isMuted),
     folder: chat.folder,
-    membersCount,
-    description: chat.description,
-    username: chat.username,
+    membersCount: members.length || chat.membersCount || 1,
+    description: chat.description || '',
+    username: chat.username || '',
     isPublic: Boolean(chat.isPublic),
     ownerId: chat.ownerId,
     viewerJoined
   };
 };
 
-export const getChats = async (req: Request, res: Response): Promise<void> => {
+export const getChats = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const authUser = getAuthUserFromRequest(req);
-    if (authUser?.id) {
-      const existingSaved = await ChatModel.findOne({ ownerId: authUser.id, type: 'saved' });
-      if (!existingSaved) {
-        await ChatModel.create({
-          name: 'Saqlangan xabarlar',
-          type: 'saved',
-          ownerId: authUser.id,
-          members: [authUser.id],
-          membersCount: 1,
-          lastMessage: 'Shaxsiy eslatmalaringiz va xabarlaringiz',
-          time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-          unreadCount: 0,
-          isPinned: true,
-          isMuted: false,
-          folder: 'personal',
-          description: `Sizning shaxsiy saqlangan xabarlaringiz va fayllaringiz, ${authUser.firstName}.`
-        });
-      }
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
     }
 
-    const chats = await ChatModel.find({}).sort({ updatedAt: -1 });
+    let savedChat = await ChatModel.findOne({ ownerId: userId, type: 'saved' });
+    if (!savedChat) {
+      savedChat = await ChatModel.create({
+        name: 'Saqlangan xabarlar',
+        type: 'saved',
+        ownerId: userId,
+        members: [userId],
+        membersCount: 1,
+        lastMessage: 'Shaxsiy eslatmalaringiz va xabarlaringiz',
+        time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+        unreadCount: 0,
+        isPinned: true,
+        isMuted: false,
+        folder: 'personal',
+        description: `Sizning shaxsiy saqlangan xabarlaringiz va fayllaringiz, ${req.user?.firstName}.`
+      });
+    }
+
+    const userChats = await ChatModel.find({
+      $or: [
+        { members: userId },
+        { ownerId: userId },
+        { type: 'saved', ownerId: userId }
+      ]
+    }).sort({ updatedAt: -1 });
+
     res.json({
       success: true,
-      chats: chats.map((chat) => serializeChat(chat, authUser?.id))
+      chats: userChats.map((chat) => serializeChat(chat, userId))
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const checkUsernameAvailability = async (req: Request, res: Response): Promise<void> => {
+export const checkUsernameAvailability = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const rawUsername = req.params.username || '';
-    const username = normalizeUsername(rawUsername);
-
+    const username = normalizeUsername(req.params.username || '');
     if (!isValidUsername(username)) {
       res.json({
         success: true,
         available: false,
         reason: 'invalid',
-        message: "Username faqat 5-32 ta kichik harf, raqam yoki '_' dan iborat bo'lishi kerak"
+        message: "Username faqat 3-32 ta kichik harf, raqam yoki '_' dan iborat bo'lishi kerak"
       });
       return;
     }
 
     const existingChat = await ChatModel.findOne({ username });
-    if (existingChat) {
+    const existingUser = await UserModel.findOne({ username });
+
+    if (existingChat || existingUser) {
       res.json({
         success: true,
         available: false,
@@ -138,34 +101,38 @@ export const checkUsernameAvailability = async (req: Request, res: Response): Pr
       return;
     }
 
-    res.json({
-      success: true,
-      available: true
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, available: true });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const createChat = async (req: Request, res: Response): Promise<void> => {
+const CreateChatSchema = z.object({
+  name: z.string().min(1, 'Chat nomi kiritilishi shart'),
+  type: z.enum(['group', 'channel']),
+  avatar: z.string().optional(),
+  description: z.string().optional(),
+  username: z.string().optional(),
+  isPublic: z.boolean().optional()
+});
+
+export const createChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { name, type, avatar, description, username, isPublic } = req.body;
-    const normalizedType = type || 'user';
-    const normalizedFolder = normalizedType === 'group' ? 'groups' : normalizedType === 'channel' ? 'channels' : 'personal';
-    const authUser = getAuthUserFromRequest(req);
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
+    }
+
+    const parsed = CreateChatSchema.parse(req.body);
+    const { name, type, avatar, description, username, isPublic } = parsed;
+
     const normalizedUsername = username ? normalizeUsername(username) : '';
-
-    if ((normalizedType === 'group' || normalizedType === 'channel') && !normalizedUsername) {
-      res.status(400).json({ success: false, message: 'Guruh va kanal uchun username majburiy' });
-      return;
-    }
-
-    if (normalizedUsername && !isValidUsername(normalizedUsername)) {
-      res.status(400).json({ success: false, message: "Username noto'g'ri formatda" });
-      return;
-    }
-
     if (normalizedUsername) {
+      if (!isValidUsername(normalizedUsername)) {
+        res.status(400).json({ success: false, message: "Username noto'g'ri formatda" });
+        return;
+      }
       const existingChat = await ChatModel.findOne({ username: normalizedUsername });
       if (existingChat) {
         res.status(409).json({ success: false, message: 'Bu username band' });
@@ -173,49 +140,48 @@ export const createChat = async (req: Request, res: Response): Promise<void> => 
       }
     }
 
-    const memberIds = authUser?.id ? [authUser.id] : [];
+    const folder = type === 'group' ? 'groups' : 'channels';
     const createdChat = await ChatModel.create({
       name,
-      type: normalizedType,
-      avatar,
+      type,
+      avatar: avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
       description,
       username: normalizedUsername || undefined,
-      ownerId: authUser?.id,
-      lastMessage: normalizedType === 'channel' ? 'Kanal yaratildi' : normalizedType === 'group' ? 'Guruh yaratildi' : 'Muloqot boshlandi',
+      ownerId: userId,
+      lastMessage: type === 'channel' ? 'Kanal yaratildi' : 'Guruh yaratildi',
       time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
       unreadCount: 0,
       isPinned: false,
       isMuted: false,
-      folder: normalizedFolder,
-      members: memberIds,
-      membersCount: memberIds.length,
-      isPublic: typeof isPublic === 'boolean' ? isPublic : normalizedType === 'channel' || normalizedType === 'group'
+      folder,
+      members: [userId],
+      membersCount: 1,
+      isPublic: typeof isPublic === 'boolean' ? isPublic : true
     });
 
-    res.json({ success: true, chat: serializeChat(createdChat, authUser?.id) });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, chat: serializeChat(createdChat, userId) });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const getPublicChatByUsername = async (req: Request, res: Response): Promise<void> => {
+export const getPublicChatByUsername = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const rawUsername = req.params.username || '';
-    const username = normalizeUsername(rawUsername);
-    const authUser = getAuthUserFromRequest(req);
+    const username = normalizeUsername(req.params.username || '');
+    const userId = req.user?._id?.toString();
 
-    // 1. Look for public Group or Channel in ChatModel
+    // 1. Group or Channel
     const chat = await ChatModel.findOne({ username });
     if (chat && (chat.type === 'group' || chat.type === 'channel')) {
       res.json({
         success: true,
         targetType: 'chat',
-        chat: serializeChat(chat, authUser?.id)
+        chat: serializeChat(chat, userId)
       });
       return;
     }
 
-    // 2. Look for registered User in UserModel
+    // 2. User
     const dbUser = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
     if (dbUser) {
       res.json({
@@ -228,52 +194,70 @@ export const getPublicChatByUsername = async (req: Request, res: Response): Prom
           username: dbUser.username || username,
           avatarUrl: dbUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
           bio: dbUser.bio || 'Xabarchi ilovasidan foydalanmoqda ✨',
-          isOnline: dbUser.isOnline !== false
+          isOnline: dbUser.isOnline !== false,
+          allowCalls: dbUser.allowCalls !== false
         }
       });
       return;
     }
 
-    // 3. Fallback Telegram profile view
-    res.json({
-      success: true,
-      targetType: 'user',
-      user: {
-        id: 'usr_' + username,
-        firstName: username,
-        lastName: '',
-        username,
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-        bio: `@${username} Xabarchi foydalanuvchisi`,
-        isOnline: true
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(404).json({ success: false, message: 'Foydalanuvchi yoki chat topilmadi' });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const openDirectChatByUsername = async (req: Request, res: Response): Promise<void> => {
+export const openDirectChatByUsername = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const rawUsername = req.params.username || '';
-    const username = normalizeUsername(rawUsername);
-    const authUser = getAuthUserFromRequest(req);
+    const username = normalizeUsername(req.params.username || '');
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
+    }
 
-    let chat = await ChatModel.findOne({ username, type: 'user' });
+    if (req.user?.username && normalizeUsername(req.user.username) === username) {
+      let savedChat = await ChatModel.findOne({ ownerId: userId, type: 'saved' });
+      if (!savedChat) {
+        savedChat = await ChatModel.create({
+          name: 'Saqlangan xabarlar',
+          type: 'saved',
+          ownerId: userId,
+          members: [userId],
+          membersCount: 1,
+          lastMessage: 'Shaxsiy eslatmalaringiz va xabarlaringiz',
+          time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+          unreadCount: 0,
+          isPinned: true,
+          folder: 'personal'
+        });
+      }
+      res.json({ success: true, chat: serializeChat(savedChat, userId) });
+      return;
+    }
+
+    const targetUser = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+    if (!targetUser) {
+      res.status(404).json({ success: false, message: 'Bunday username bilan foydalanuvchi topilmadi' });
+      return;
+    }
+
+    const targetUserId = targetUser._id.toString();
+
+    let chat = await ChatModel.findOne({
+      type: 'user',
+      members: { $all: [userId, targetUserId] }
+    });
 
     if (!chat) {
-      const dbUser = await UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
-      const chatName = dbUser ? `${dbUser.firstName} ${dbUser.lastName || ''}`.trim() : username;
-      const avatar = dbUser?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
-
       chat = await ChatModel.create({
-        name: chatName,
+        name: `${targetUser.firstName} ${targetUser.lastName || ''}`.trim(),
         type: 'user',
-        avatar,
-        username,
-        description: dbUser?.bio || 'Shaxsiy suhbat',
-        ownerId: authUser?.id,
-        members: authUser?.id ? [authUser.id] : [],
+        avatar: targetUser.avatarUrl,
+        username: targetUser.username,
+        description: targetUser.bio,
+        ownerId: userId,
+        members: [userId, targetUserId],
         membersCount: 2,
         lastMessage: 'Muloqot boshlandi',
         time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
@@ -281,20 +265,17 @@ export const openDirectChatByUsername = async (req: Request, res: Response): Pro
       });
     }
 
-    res.json({
-      success: true,
-      chat: serializeChat(chat, authUser?.id)
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, chat: serializeChat(chat, userId) });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const joinChat = async (req: Request, res: Response): Promise<void> => {
+export const joinChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const authUser = getAuthUserFromRequest(req);
-    if (!authUser) {
-      res.status(401).json({ success: false, message: 'Kirish talab qilinadi' });
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
       return;
     }
 
@@ -304,25 +285,25 @@ export const joinChat = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const memberIds = Array.isArray(chat.members) ? chat.members.map((member: any) => member.toString()) : [];
-    if (!memberIds.includes(authUser.id)) {
-      memberIds.push(authUser.id);
+    const memberIds = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    if (!memberIds.includes(userId)) {
+      memberIds.push(userId);
       chat.members = memberIds as any;
       chat.membersCount = memberIds.length;
       await chat.save();
     }
 
-    res.json({ success: true, chat: serializeChat(chat, authUser.id) });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, chat: serializeChat(chat, userId) });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const leaveChat = async (req: Request, res: Response): Promise<void> => {
+export const leaveChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const authUser = getAuthUserFromRequest(req);
-    if (!authUser) {
-      res.status(401).json({ success: false, message: 'Kirish talab qilinadi' });
+    const userId = req.user?._id?.toString();
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
       return;
     }
 
@@ -332,20 +313,50 @@ export const leaveChat = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const memberIds = Array.isArray(chat.members) ? chat.members.map((member: any) => member.toString()) : [];
-    const nextMembers = memberIds.filter((memberId) => memberId !== authUser.id);
+    const memberIds = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    const nextMembers = memberIds.filter((id) => id !== userId);
 
     chat.members = nextMembers as any;
     chat.membersCount = nextMembers.length;
     await chat.save();
 
-    res.json({ success: true, chat: serializeChat(chat, authUser.id) });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, chat: serializeChat(chat, userId) });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const getPublicChatMessages = async (req: Request, res: Response): Promise<void> => {
+export const deleteChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user?._id?.toString();
+    const { chatId } = req.params;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
+    }
+
+    const chat = await ChatModel.findById(chatId);
+    if (!chat) {
+      res.status(404).json({ success: false, message: 'Chat topilmadi' });
+      return;
+    }
+
+    if (chat.type === 'saved') {
+      res.status(400).json({ success: false, message: 'Saqlangan xabarlar chatini o\'chirib bo\'lmaydi' });
+      return;
+    }
+
+    // Remove all messages associated with chatId
+    await MessageModel.deleteMany({ chatId });
+    await ChatModel.findByIdAndDelete(chatId);
+
+    res.json({ success: true, chatId, message: 'Chat va barcha xabarlar o\'chirildi' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPublicChatMessages = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const username = normalizeUsername(req.params.username || '');
     const chat = await ChatModel.findOne({ username });
@@ -355,43 +366,43 @@ export const getPublicChatMessages = async (req: Request, res: Response): Promis
       return;
     }
 
-    const { MessageModel } = await import('../models/Message.js');
     const messages = await MessageModel.find({ chatId: chat._id.toString() }).sort({ createdAt: 1 });
-
     res.json({ success: true, messages });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const togglePinChat = async (req: Request, res: Response): Promise<void> => {
-  const { chatId } = req.params;
+export const togglePinChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { chatId } = req.params;
     const chat = await ChatModel.findById(chatId);
-    if (chat) {
-      chat.isPinned = !chat.isPinned;
-      await chat.save();
-      res.json({ success: true, isPinned: chat.isPinned });
+    if (!chat) {
+      res.status(404).json({ success: false, message: 'Chat topilmadi' });
       return;
     }
-  } catch {
-    // If the DB lookup fails, fall back to a successful optimistic response.
+
+    chat.isPinned = !chat.isPinned;
+    await chat.save();
+    res.json({ success: true, isPinned: chat.isPinned });
+  } catch (error) {
+    next(error);
   }
-  res.json({ success: true, isPinned: true });
 };
 
-export const toggleMuteChat = async (req: Request, res: Response): Promise<void> => {
-  const { chatId } = req.params;
+export const toggleMuteChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const { chatId } = req.params;
     const chat = await ChatModel.findById(chatId);
-    if (chat) {
-      chat.isMuted = !chat.isMuted;
-      await chat.save();
-      res.json({ success: true, isMuted: chat.isMuted });
+    if (!chat) {
+      res.status(404).json({ success: false, message: 'Chat topilmadi' });
       return;
     }
-  } catch {
-    // If the DB lookup fails, fall back to a successful optimistic response.
+
+    chat.isMuted = !chat.isMuted;
+    await chat.save();
+    res.json({ success: true, isMuted: chat.isMuted });
+  } catch (error) {
+    next(error);
   }
-  res.json({ success: true, isMuted: true });
 };

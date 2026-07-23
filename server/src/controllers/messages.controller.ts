@@ -1,57 +1,102 @@
-import { Request, Response } from 'express';
+import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
-import { MessageModel } from '../models/Message.js';
+import { z } from 'zod';
+import { MessageModel, IMessage } from '../models/Message.js';
 import { ChatModel } from '../models/Chat.js';
 import { uploadImageToSupabase } from '../services/supabase.service.js';
+import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 
-export const getMessages = async (req: Request, res: Response): Promise<void> => {
-  const { chatId } = req.params;
+const serializeMessage = (message: IMessage, currentUserId?: string) => {
+  return {
+    id: message._id.toString(),
+    chatId: message.chatId,
+    senderId: message.senderId,
+    senderName: message.senderName || '',
+    text: message.text || '',
+    time: message.time,
+    date: message.date || 'Bugun',
+    isOutgoing: currentUserId ? message.senderId === currentUserId : message.isOutgoing,
+    status: message.status,
+    reactions: message.reactions || [],
+    replyTo: message.replyTo,
+    media: message.media,
+    isPinned: Boolean(message.isPinned),
+    views: message.views || 0,
+    isEdited: Boolean(message.isEdited),
+    editedAt: message.editedAt
+  };
+};
+
+export const getMessages = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    let messages: any[] = [];
-    try {
-      if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
-        messages = await MessageModel.find({
-          $or: [{ chatId: 'chat_saved' }, { chatId: { $regex: /^chat_saved/ } }]
-        }).sort({ createdAt: 1 });
-      } else {
-        messages = await MessageModel.find({ chatId }).sort({ createdAt: 1 });
-      }
-    } catch (dbErr) {
-      console.warn('[MongoDB Messages Get Warning]:', dbErr);
+    const { chatId } = req.params;
+    const currentUserId = req.user?._id?.toString();
+
+    let targetChatId = chatId;
+    if (chatId === 'chat_saved' && currentUserId) {
+      const savedChat = await ChatModel.findOne({ ownerId: currentUserId, type: 'saved' });
+      if (savedChat) targetChatId = savedChat._id.toString();
     }
-    res.json({ success: true, messages });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+
+    const messages = await MessageModel.find({ chatId: targetChatId }).sort({ createdAt: 1 });
+    res.json({
+      success: true,
+      messages: messages.map((m) => serializeMessage(m, currentUserId))
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const sendMessage = async (req: Request, res: Response): Promise<void> => {
-  const { chatId, text, senderId, senderName, replyTo, media } = req.body;
+const SendMessageSchema = z.object({
+  chatId: z.string().min(1, 'ChatId kiritilishi shart'),
+  text: z.string().optional().default(''),
+  replyTo: z.object({
+    id: z.string(),
+    senderName: z.string(),
+    text: z.string()
+  }).optional(),
+  media: z.object({
+    type: z.enum(['image', 'voice', 'file']),
+    url: z.string(),
+    name: z.string().optional(),
+    duration: z.string().optional(),
+    size: z.string().optional()
+  }).optional()
+});
 
-  const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
-  
-  let chat: any = null;
+export const sendMessage = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    if (chatId === 'chat_saved' || chatId.startsWith('chat_saved')) {
-      chat = await ChatModel.findOne({ type: 'saved' });
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
+    }
+
+    const parsed = SendMessageSchema.parse(req.body);
+    let { chatId, text, replyTo, media } = parsed;
+
+    const timeNow = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+
+    let chat: any = null;
+    if (chatId === 'chat_saved') {
+      chat = await ChatModel.findOne({ ownerId: user._id.toString(), type: 'saved' });
+      if (chat) chatId = chat._id.toString();
     } else if (mongoose.Types.ObjectId.isValid(chatId)) {
       chat = await ChatModel.findById(chatId);
     } else {
       chat = await ChatModel.findOne({ username: chatId });
+      if (chat) chatId = chat._id.toString();
     }
-  } catch {
-    // Ignore error
-  }
 
-  const views = chat?.type === 'channel' ? 1 : 0;
+    const views = chat?.type === 'channel' ? 1 : 0;
+    const senderName = `${user.firstName} ${user.lastName || ''}`.trim();
 
-  let savedMessage: any = null;
-  try {
-    savedMessage = await MessageModel.create({
+    const savedMessage = await MessageModel.create({
       chatId,
-      senderId: senderId || 'usr_me',
-      senderName: senderName || 'Siz',
-      text: text || '',
+      senderId: user._id.toString(),
+      senderName,
+      text,
       time: timeNow,
       date: 'Bugun',
       isOutgoing: true,
@@ -61,49 +106,22 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
       views
     });
 
-    // Update last message in chat
     if (chat) {
       chat.lastMessage = text || (media ? `[${media.type === 'image' ? 'Rasm' : media.type === 'voice' ? 'Ovozli xabar' : 'Fayl'}]` : '');
       chat.time = timeNow;
       await chat.save();
     }
-  } catch (dbErr) {
-    console.warn('[MongoDB Message Save Warning]:', dbErr);
+
+    res.json({
+      success: true,
+      message: serializeMessage(savedMessage, user._id.toString())
+    });
+  } catch (error) {
+    next(error);
   }
-
-  const msgData = savedMessage ? {
-    id: savedMessage._id.toString(),
-    chatId: savedMessage.chatId,
-    senderId: savedMessage.senderId,
-    senderName: savedMessage.senderName,
-    text: savedMessage.text,
-    time: savedMessage.time,
-    date: savedMessage.date,
-    isOutgoing: savedMessage.isOutgoing,
-    status: savedMessage.status,
-    replyTo: savedMessage.replyTo,
-    media: savedMessage.media,
-    views: savedMessage.views
-  } : {
-    id: 'm_' + Date.now(),
-    chatId,
-    senderId: senderId || 'usr_me',
-    senderName: senderName || 'Siz',
-    text: text || '',
-    time: timeNow,
-    date: 'Bugun',
-    isOutgoing: true,
-    status: 'delivered',
-    replyTo,
-    media,
-    views
-  };
-
-  res.json({ success: true, message: msgData });
 };
 
-// Upload media file to Supabase Storage
-export const uploadMedia = async (req: Request, res: Response): Promise<void> => {
+export const uploadMedia = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { base64Data, fileName, mimeType } = req.body;
     if (!base64Data) {
@@ -112,26 +130,32 @@ export const uploadMedia = async (req: Request, res: Response): Promise<void> =>
     }
 
     const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), 'base64');
-    const publicUrl = await uploadImageToSupabase(buffer, fileName || 'rasm.jpg', mimeType || 'image/jpeg');
+    const publicUrl = await uploadImageToSupabase(buffer, fileName || 'media.jpg', mimeType || 'image/jpeg');
 
     res.json({
       success: true,
       url: publicUrl,
-      message: "Rasm Supabase Omboriga muvaffaqiyatli yuklandi! 📸"
+      message: "Fayl muvaffaqiyatli yuklandi"
     });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const editMessage = async (req: Request, res: Response): Promise<void> => {
+export const editMessage = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { messageId } = req.params;
     const { text } = req.body;
+    const userId = req.user?._id?.toString();
 
     const message = await MessageModel.findById(messageId);
     if (!message) {
       res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+      return;
+    }
+
+    if (message.senderId !== userId) {
+      res.status(403).json({ success: false, message: 'Faqat o\'z xabaringizni tahrirlashingiz mumkin' });
       return;
     }
 
@@ -140,23 +164,36 @@ export const editMessage = async (req: Request, res: Response): Promise<void> =>
     message.editedAt = new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
     await message.save();
 
-    res.json({ success: true, message });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.json({ success: true, message: serializeMessage(message, userId) });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const deleteMessage = async (req: Request, res: Response): Promise<void> => {
+export const deleteMessage = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { messageId } = req.params;
+    const userId = req.user?._id?.toString();
+
+    const message = await MessageModel.findById(messageId);
+    if (!message) {
+      res.status(404).json({ success: false, message: 'Xabar topilmadi' });
+      return;
+    }
+
+    if (message.senderId !== userId) {
+      res.status(403).json({ success: false, message: 'Faqat o\'z xabaringizni o\'chirishingiz mumkin' });
+      return;
+    }
+
     await MessageModel.findByIdAndDelete(messageId);
     res.json({ success: true, messageId });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const toggleReaction = async (req: Request, res: Response): Promise<void> => {
+export const toggleReaction = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
@@ -177,12 +214,12 @@ export const toggleReaction = async (req: Request, res: Response): Promise<void>
     await message.save();
 
     res.json({ success: true, messageId, reactions: updatedReactions });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const pinMessage = async (req: Request, res: Response): Promise<void> => {
+export const pinMessage = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { messageId } = req.params;
     const message = await MessageModel.findById(messageId);
@@ -195,7 +232,7 @@ export const pinMessage = async (req: Request, res: Response): Promise<void> => 
     await message.save();
 
     res.json({ success: true, messageId, isPinned: message.isPinned });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    next(error);
   }
 };

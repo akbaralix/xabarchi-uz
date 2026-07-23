@@ -40,10 +40,12 @@ const UserSchema = new mongoose_1.Schema({
     googleId: { type: String, unique: true, sparse: true },
     firstName: { type: String, required: true },
     lastName: { type: String },
-    username: { type: String },
-    phone: { type: String },
+    username: { type: String, unique: true, sparse: true },
+    phone: { type: String, unique: true, sparse: true },
     bio: { type: String, default: 'Xabarchi ilovasidan foydalanmoqda ✨' },
     avatarUrl: { type: String },
     isOnline: { type: Boolean, default: true },
+    allowCalls: { type: Boolean, default: true },
+    refreshToken: { type: String }
 }, { timestamps: true });
 exports.UserModel = mongoose_1.default.model('User', UserSchema);
