@@ -32,10 +32,34 @@ export const getMessages = async (req: AuthenticatedRequest, res: Response, next
     const { chatId } = req.params;
     const currentUserId = req.user?._id?.toString();
 
+    if (!currentUserId) {
+      res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+      return;
+    }
+
     let targetChatId = chatId;
-    if (chatId === 'chat_saved' && currentUserId) {
+    let chat: any = null;
+
+    if (chatId === 'chat_saved') {
       const savedChat = await ChatModel.findOne({ ownerId: currentUserId, type: 'saved' });
       if (savedChat) targetChatId = savedChat._id.toString();
+    } else if (mongoose.Types.ObjectId.isValid(chatId)) {
+      chat = await ChatModel.findById(chatId);
+    } else {
+      chat = await ChatModel.findOne({ username: chatId });
+      if (chat) targetChatId = chat._id.toString();
+    }
+
+    if (chat) {
+      const members = Array.isArray(chat.members) ? chat.members.map((m: any) => m.toString()) : [];
+      const isOwner = chat.ownerId?.toString() === currentUserId;
+      const isMember = members.includes(currentUserId);
+      const isPublic = Boolean(chat.isPublic);
+
+      if (!isPublic && !isMember && !isOwner && chat.type !== 'saved') {
+        res.status(403).json({ success: false, message: 'Bu chat xabarlarini ko\'rishga ruxsatingiz yo\'q' });
+        return;
+      }
     }
 
     const messages = await MessageModel.find({ chatId: targetChatId }).sort({ createdAt: 1 });

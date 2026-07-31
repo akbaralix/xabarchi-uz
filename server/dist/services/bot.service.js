@@ -14,6 +14,15 @@ class BotAuthService {
     pendingAuths = new Map();
     constructor() {
         this.initBot();
+        // Periodically clean up expired auth sessions (older than 10 minutes)
+        setInterval(() => {
+            const now = Date.now();
+            for (const [token, session] of this.pendingAuths.entries()) {
+                if (now - session.createdAt > 10 * 60 * 1000) {
+                    this.pendingAuths.delete(token);
+                }
+            }
+        }, 60 * 1000);
     }
     initBot() {
         if (!index_js_1.config.telegramBotEnabled) {
@@ -36,15 +45,17 @@ class BotAuthService {
                 const tgUser = msg.from;
                 if (!tgUser || !text)
                     return;
-                const codeMatch = text.match(/\b\d{6}\b/);
-                const code = codeMatch ? codeMatch[0] : (text.startsWith('/start ') ? text.replace('/start ', '').trim() : '');
-                if (!code) {
-                    if (text === '/start') {
-                        await this.bot?.sendMessage(chatId, "Salom! <b>Xabarchi Web</b> ilovasiga kirish uchun web-saytdagi <b>'Telegram orqali kirish'</b> tugmasini bosing va botni oching.", { parse_mode: 'HTML' });
-                    }
+                const tokenMatch = text.startsWith('/start ') ? text.replace('/start ', '').trim() : text.trim();
+                if (!tokenMatch || tokenMatch === '/start') {
+                    await this.bot?.sendMessage(chatId, "Salom! <b>Xabarchi Web</b> ilovasiga kirish uchun web-saytdagi <b>'Telegram orqali kirish'</b> tugmasini bosing.", { parse_mode: 'HTML' });
                     return;
                 }
-                logger_js_1.logger.info(`[Telegram Bot Auth] Code received: ${code} from User: ${tgUser.first_name} (@${tgUser.username})`);
+                const session = this.pendingAuths.get(tokenMatch);
+                if (!session) {
+                    await this.bot?.sendMessage(chatId, "⚠️ Avtorizatsiya sessiyasi eskirgan yoki mavjud emas. Iltimos, web-saytdan qaytadan urinib ko'ring.", { parse_mode: 'HTML' });
+                    return;
+                }
+                logger_js_1.logger.info(`[Telegram Bot Auth] Valid token received from User: ${tgUser.first_name} (@${tgUser.username})`);
                 let avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}`;
                 try {
                     const photos = await this.bot?.getUserProfilePhotos(tgUser.id, { limit: 1 });
@@ -68,7 +79,7 @@ class BotAuthService {
                     isOnline: true,
                     allowCalls: true
                 }, { upsert: true, new: true });
-                this.authenticateSession(code, dbUser._id.toString());
+                this.authenticateSession(tokenMatch, dbUser._id.toString());
                 const welcomeMessage = `<b>Xabarchi Web</b> ilovasiga xush kelibsiz, <b>${tgUser.first_name}</b>! 🚀\n\nSiz muvaffaqiyatli avtorizatsiyadan o'tdingiz. Brauzeringiz avtomatik ravishda ilovaga kiradi.`;
                 await this.bot?.sendMessage(chatId, welcomeMessage, { parse_mode: 'HTML' });
             });
@@ -78,28 +89,31 @@ class BotAuthService {
         }
     }
     createAuthSession() {
-        const code = String(crypto_1.default.randomInt(100000, 999999));
-        this.pendingAuths.set(code, {
-            code,
+        const token = crypto_1.default.randomBytes(32).toString('hex');
+        this.pendingAuths.set(token, {
+            token,
             status: 'pending',
             createdAt: Date.now()
         });
-        return code;
+        return token;
     }
-    authenticateSession(code, userId) {
-        const cleanCode = code.trim();
-        const existing = this.pendingAuths.get(cleanCode);
+    authenticateSession(token, userId) {
+        const cleanToken = token.trim();
+        const existing = this.pendingAuths.get(cleanToken);
         const authenticatedSession = {
-            code: cleanCode,
+            token: cleanToken,
             userId,
             status: 'authenticated',
             createdAt: existing ? existing.createdAt : Date.now()
         };
-        this.pendingAuths.set(cleanCode, authenticatedSession);
+        this.pendingAuths.set(cleanToken, authenticatedSession);
         return authenticatedSession;
     }
-    checkAuthSession(code) {
-        return this.pendingAuths.get(code.trim());
+    checkAuthSession(token) {
+        return this.pendingAuths.get(token.trim());
+    }
+    consumeAuthSession(token) {
+        this.pendingAuths.delete(token.trim());
     }
 }
 exports.botAuthService = new BotAuthService();

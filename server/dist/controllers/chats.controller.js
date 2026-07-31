@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const Chat_js_1 = require("../models/Chat.js");
 const User_js_1 = require("../models/User.js");
 const Message_js_1 = require("../models/Message.js");
+const auth_controller_js_1 = require("./auth.controller.js");
 const normalizeUsername = (value) => value.trim().replace(/^@+/, '').toLowerCase();
 const isValidUsername = (value) => /^[a-z0-9_]{3,32}$/.test(value);
 const serializeChat = (chat, viewerId) => {
@@ -129,15 +130,7 @@ const searchAll = async (req, res, next) => {
         }).limit(20);
         const users = usersRaw
             .filter((u) => u._id.toString() !== userId)
-            .map((u) => ({
-            id: u._id.toString(),
-            firstName: u.firstName,
-            lastName: u.lastName || '',
-            username: u.username || '',
-            avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username || u._id.toString()}`,
-            bio: u.bio || '',
-            isOnline: Boolean(u.isOnline)
-        }));
+            .map((u) => (0, auth_controller_js_1.serializePublicUser)(u));
         // 2. Search Channels
         const channelsRaw = await Chat_js_1.ChatModel.find({
             type: 'channel',
@@ -251,16 +244,7 @@ const getPublicChatByUsername = async (req, res, next) => {
             res.json({
                 success: true,
                 targetType: 'user',
-                user: {
-                    id: dbUser._id.toString(),
-                    firstName: dbUser.firstName,
-                    lastName: dbUser.lastName || '',
-                    username: dbUser.username || username,
-                    avatarUrl: dbUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-                    bio: dbUser.bio || 'Xabarchi ilovasidan foydalanmoqda ✨',
-                    isOnline: dbUser.isOnline !== false,
-                    allowCalls: dbUser.allowCalls !== false
-                }
+                user: (0, auth_controller_js_1.serializePublicUser)(dbUser)
             });
             return;
         }
@@ -397,6 +381,13 @@ const deleteChat = async (req, res, next) => {
             res.status(400).json({ success: false, message: 'Saqlangan xabarlar chatini o\'chirib bo\'lmaydi' });
             return;
         }
+        const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+        const isOwner = chat.ownerId?.toString() === userId;
+        const isMember = members.includes(userId);
+        if (!isOwner && !isMember) {
+            res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
+            return;
+        }
         // Remove all messages associated with chatId
         await Message_js_1.MessageModel.deleteMany({ chatId });
         await Chat_js_1.ChatModel.findByIdAndDelete(chatId);
@@ -415,6 +406,13 @@ const getPublicChatMessages = async (req, res, next) => {
             res.status(404).json({ success: false, message: 'Chat topilmadi' });
             return;
         }
+        const userId = req.user?._id?.toString();
+        const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+        const isMember = userId ? members.includes(userId) : false;
+        if (!chat.isPublic && !isMember) {
+            res.status(403).json({ success: false, message: 'Bu chat maxfiy va siz unga a\'zo emassiz' });
+            return;
+        }
         const messages = await Message_js_1.MessageModel.find({ chatId: chat._id.toString() }).sort({ createdAt: 1 });
         res.json({ success: true, messages });
     }
@@ -425,10 +423,16 @@ const getPublicChatMessages = async (req, res, next) => {
 exports.getPublicChatMessages = getPublicChatMessages;
 const togglePinChat = async (req, res, next) => {
     try {
+        const userId = req.user?._id?.toString();
         const { chatId } = req.params;
         const chat = await Chat_js_1.ChatModel.findById(chatId);
         if (!chat) {
             res.status(404).json({ success: false, message: 'Chat topilmadi' });
+            return;
+        }
+        const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+        if (userId && !members.includes(userId) && chat.ownerId?.toString() !== userId) {
+            res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
             return;
         }
         chat.isPinned = !chat.isPinned;
@@ -442,10 +446,16 @@ const togglePinChat = async (req, res, next) => {
 exports.togglePinChat = togglePinChat;
 const toggleMuteChat = async (req, res, next) => {
     try {
+        const userId = req.user?._id?.toString();
         const { chatId } = req.params;
         const chat = await Chat_js_1.ChatModel.findById(chatId);
         if (!chat) {
             res.status(404).json({ success: false, message: 'Chat topilmadi' });
+            return;
+        }
+        const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+        if (userId && !members.includes(userId) && chat.ownerId?.toString() !== userId) {
+            res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
             return;
         }
         chat.isMuted = !chat.isMuted;

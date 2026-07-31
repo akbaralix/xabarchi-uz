@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateProfile = exports.logout = exports.getMe = exports.verifyCode = exports.sendCode = exports.googleLogin = exports.checkTelegramAuth = exports.initTelegramAuth = void 0;
+exports.updateProfile = exports.logout = exports.getMe = exports.verifyCode = exports.sendCode = exports.googleLogin = exports.checkTelegramAuth = exports.initTelegramAuth = exports.serializePublicUser = exports.serializeSelf = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const zod_1 = require("zod");
 const index_js_1 = require("../config/index.js");
@@ -30,7 +30,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
     res.cookie(AUTH_COOKIE_NAME, accessToken, cookieOptions);
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, cookieOptions);
 };
-const serializeUser = (user) => ({
+const serializeSelf = (user) => ({
     id: user._id.toString(),
     firstName: user.firstName,
     lastName: user.lastName || '',
@@ -41,6 +41,17 @@ const serializeUser = (user) => ({
     isOnline: user.isOnline !== false,
     allowCalls: user.allowCalls !== false
 });
+exports.serializeSelf = serializeSelf;
+const serializePublicUser = (user) => ({
+    id: user._id.toString(),
+    firstName: user.firstName,
+    lastName: user.lastName || '',
+    username: user.username || '',
+    avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username || user._id.toString()}`,
+    bio: user.bio || '',
+    isOnline: user.isOnline !== false
+});
+exports.serializePublicUser = serializePublicUser;
 const initTelegramAuth = async (_req, res, next) => {
     try {
         const code = bot_service_js_1.botAuthService.createAuthSession();
@@ -69,6 +80,8 @@ const checkTelegramAuth = async (req, res, next) => {
                 res.status(404).json({ success: false, message: 'Foydalanuvchi topilmadi' });
                 return;
             }
+            // Consume session so it cannot be re-used or polled again
+            bot_service_js_1.botAuthService.consumeAuthSession(cleanCode);
             const accessToken = signAccessToken(user._id.toString());
             const refreshToken = signRefreshToken(user._id.toString());
             user.refreshToken = refreshToken;
@@ -79,7 +92,7 @@ const checkTelegramAuth = async (req, res, next) => {
                 status: 'authenticated',
                 token: accessToken,
                 refreshToken,
-                user: serializeUser(user),
+                user: (0, exports.serializeSelf)(user),
             });
             return;
         }
@@ -140,7 +153,7 @@ const googleLogin = async (req, res, next) => {
             message: 'Google hisobi orqali muvaffaqiyatli kirildi',
             token: accessToken,
             refreshToken,
-            user: serializeUser(user)
+            user: (0, exports.serializeSelf)(user)
         });
     }
     catch (error) {
@@ -199,7 +212,7 @@ const verifyCode = async (req, res, next) => {
             message: 'Tizimga muvaffaqiyatli kirildi',
             token: accessToken,
             refreshToken,
-            user: serializeUser(user)
+            user: (0, exports.serializeSelf)(user)
         });
     }
     catch (error) {
@@ -213,7 +226,7 @@ const getMe = async (req, res, next) => {
             res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
             return;
         }
-        res.json({ success: true, user: serializeUser(req.user) });
+        res.json({ success: true, user: (0, exports.serializeSelf)(req.user) });
     }
     catch (error) {
         next(error);
@@ -268,7 +281,7 @@ const updateProfile = async (req, res, next) => {
         res.json({
             success: true,
             message: 'Profil muvaffaqiyatli yangilandi',
-            user: serializeUser(req.user)
+            user: (0, exports.serializeSelf)(req.user)
         });
     }
     catch (error) {

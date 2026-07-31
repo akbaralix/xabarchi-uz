@@ -5,7 +5,7 @@ import { UserModel } from '../models/User.js';
 import { logger } from '../config/logger.js';
 
 interface PendingAuth {
-  code: string;
+  token: string;
   userId?: string;
   status: 'pending' | 'authenticated';
   createdAt: number;
@@ -17,6 +17,15 @@ class BotAuthService {
 
   constructor() {
     this.initBot();
+    // Periodically clean up expired auth sessions (older than 10 minutes)
+    setInterval(() => {
+      const now = Date.now();
+      for (const [token, session] of this.pendingAuths.entries()) {
+        if (now - session.createdAt > 10 * 60 * 1000) {
+          this.pendingAuths.delete(token);
+        }
+      }
+    }, 60 * 1000);
   }
 
   private initBot() {
@@ -44,21 +53,28 @@ class BotAuthService {
         const tgUser = msg.from;
         if (!tgUser || !text) return;
 
-        const codeMatch = text.match(/\b\d{6}\b/);
-        const code = codeMatch ? codeMatch[0] : (text.startsWith('/start ') ? text.replace('/start ', '').trim() : '');
+        const tokenMatch = text.startsWith('/start ') ? text.replace('/start ', '').trim() : text.trim();
 
-        if (!code) {
-          if (text === '/start') {
-            await this.bot?.sendMessage(
-              chatId,
-              "Salom! <b>Xabarchi Web</b> ilovasiga kirish uchun web-saytdagi <b>'Telegram orqali kirish'</b> tugmasini bosing va botni oching.",
-              { parse_mode: 'HTML' }
-            );
-          }
+        if (!tokenMatch || tokenMatch === '/start') {
+          await this.bot?.sendMessage(
+            chatId,
+            "Salom! <b>Xabarchi Web</b> ilovasiga kirish uchun web-saytdagi <b>'Telegram orqali kirish'</b> tugmasini bosing.",
+            { parse_mode: 'HTML' }
+          );
           return;
         }
 
-        logger.info(`[Telegram Bot Auth] Code received: ${code} from User: ${tgUser.first_name} (@${tgUser.username})`);
+        const session = this.pendingAuths.get(tokenMatch);
+        if (!session) {
+          await this.bot?.sendMessage(
+            chatId,
+            "⚠️ Avtorizatsiya sessiyasi eskirgan yoki mavjud emas. Iltimos, web-saytdan qaytadan urinib ko'ring.",
+            { parse_mode: 'HTML' }
+          );
+          return;
+        }
+
+        logger.info(`[Telegram Bot Auth] Valid token received from User: ${tgUser.first_name} (@${tgUser.username})`);
 
         let avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${tgUser.id}`;
         try {
@@ -88,7 +104,7 @@ class BotAuthService {
           { upsert: true, new: true }
         );
 
-        this.authenticateSession(code, dbUser._id.toString());
+        this.authenticateSession(tokenMatch, dbUser._id.toString());
 
         const welcomeMessage = `<b>Xabarchi Web</b> ilovasiga xush kelibsiz, <b>${tgUser.first_name}</b>! 🚀\n\nSiz muvaffaqiyatli avtorizatsiyadan o'tdingiz. Brauzeringiz avtomatik ravishda ilovaga kiradi.`;
         await this.bot?.sendMessage(chatId, welcomeMessage, { parse_mode: 'HTML' });
@@ -99,32 +115,36 @@ class BotAuthService {
   }
 
   createAuthSession(): string {
-    const code = String(crypto.randomInt(100000, 999999));
-    this.pendingAuths.set(code, {
-      code,
+    const token = crypto.randomBytes(32).toString('hex');
+    this.pendingAuths.set(token, {
+      token,
       status: 'pending',
       createdAt: Date.now()
     });
-    return code;
+    return token;
   }
 
-  authenticateSession(code: string, userId: string): PendingAuth {
-    const cleanCode = code.trim();
-    const existing = this.pendingAuths.get(cleanCode);
+  authenticateSession(token: string, userId: string): PendingAuth {
+    const cleanToken = token.trim();
+    const existing = this.pendingAuths.get(cleanToken);
 
     const authenticatedSession: PendingAuth = {
-      code: cleanCode,
+      token: cleanToken,
       userId,
       status: 'authenticated',
       createdAt: existing ? existing.createdAt : Date.now()
     };
 
-    this.pendingAuths.set(cleanCode, authenticatedSession);
+    this.pendingAuths.set(cleanToken, authenticatedSession);
     return authenticatedSession;
   }
 
-  checkAuthSession(code: string): PendingAuth | undefined {
-    return this.pendingAuths.get(code.trim());
+  checkAuthSession(token: string): PendingAuth | undefined {
+    return this.pendingAuths.get(token.trim());
+  }
+
+  consumeAuthSession(token: string): void {
+    this.pendingAuths.delete(token.trim());
   }
 }
 

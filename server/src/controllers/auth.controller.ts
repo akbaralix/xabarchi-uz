@@ -32,7 +32,7 @@ const setAuthCookies = (res: Response, accessToken: string, refreshToken: string
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, cookieOptions);
 };
 
-const serializeUser = (user: IUser) => ({
+export const serializeSelf = (user: IUser) => ({
   id: user._id.toString(),
   firstName: user.firstName,
   lastName: user.lastName || '',
@@ -42,6 +42,16 @@ const serializeUser = (user: IUser) => ({
   bio: user.bio || '',
   isOnline: user.isOnline !== false,
   allowCalls: user.allowCalls !== false
+});
+
+export const serializePublicUser = (user: IUser) => ({
+  id: user._id.toString(),
+  firstName: user.firstName,
+  lastName: user.lastName || '',
+  username: user.username || '',
+  avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username || user._id.toString()}`,
+  bio: user.bio || '',
+  isOnline: user.isOnline !== false
 });
 
 export const initTelegramAuth = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -74,6 +84,9 @@ export const checkTelegramAuth = async (req: Request, res: Response, next: NextF
         return;
       }
 
+      // Consume session so it cannot be re-used or polled again
+      botAuthService.consumeAuthSession(cleanCode);
+
       const accessToken = signAccessToken(user._id.toString());
       const refreshToken = signRefreshToken(user._id.toString());
       user.refreshToken = refreshToken;
@@ -86,7 +99,7 @@ export const checkTelegramAuth = async (req: Request, res: Response, next: NextF
         status: 'authenticated',
         token: accessToken,
         refreshToken,
-        user: serializeUser(user),
+        user: serializeSelf(user),
       });
       return;
     }
@@ -152,7 +165,7 @@ export const googleLogin = async (req: Request, res: Response, next: NextFunctio
       message: 'Google hisobi orqali muvaffaqiyatli kirildi',
       token: accessToken,
       refreshToken,
-      user: serializeUser(user)
+      user: serializeSelf(user)
     });
   } catch (error) {
     next(error);
@@ -215,7 +228,7 @@ export const verifyCode = async (req: Request, res: Response, next: NextFunction
       message: 'Tizimga muvaffaqiyatli kirildi',
       token: accessToken,
       refreshToken,
-      user: serializeUser(user)
+      user: serializeSelf(user)
     });
   } catch (error) {
     next(error);
@@ -228,7 +241,7 @@ export const getMe = async (req: AuthenticatedRequest, res: Response, next: Next
       res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
       return;
     }
-    res.json({ success: true, user: serializeUser(req.user) });
+    res.json({ success: true, user: serializeSelf(req.user) });
   } catch (error) {
     next(error);
   }
@@ -289,7 +302,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response, ne
     res.json({
       success: true,
       message: 'Profil muvaffaqiyatli yangilandi',
-      user: serializeUser(req.user)
+      user: serializeSelf(req.user)
     });
   } catch (error) {
     next(error);

@@ -4,6 +4,7 @@ import { ChatModel, IChat } from '../models/Chat.js';
 import { UserModel } from '../models/User.js';
 import { MessageModel } from '../models/Message.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
+import { serializePublicUser } from './auth.controller.js';
 
 const normalizeUsername = (value: string) => value.trim().replace(/^@+/, '').toLowerCase();
 const isValidUsername = (value: string) => /^[a-z0-9_]{3,32}$/.test(value);
@@ -142,15 +143,7 @@ export const searchAll = async (req: AuthenticatedRequest, res: Response, next: 
 
     const users = usersRaw
       .filter((u) => u._id.toString() !== userId)
-      .map((u) => ({
-        id: u._id.toString(),
-        firstName: u.firstName,
-        lastName: u.lastName || '',
-        username: u.username || '',
-        avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username || u._id.toString()}`,
-        bio: u.bio || '',
-        isOnline: Boolean(u.isOnline)
-      }));
+      .map((u) => serializePublicUser(u));
 
     // 2. Search Channels
     const channelsRaw = await ChatModel.find({
@@ -275,16 +268,7 @@ export const getPublicChatByUsername = async (req: AuthenticatedRequest, res: Re
       res.json({
         success: true,
         targetType: 'user',
-        user: {
-          id: dbUser._id.toString(),
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName || '',
-          username: dbUser.username || username,
-          avatarUrl: dbUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-          bio: dbUser.bio || 'Xabarchi ilovasidan foydalanmoqda ✨',
-          isOnline: dbUser.isOnline !== false,
-          allowCalls: dbUser.allowCalls !== false
-        }
+        user: serializePublicUser(dbUser)
       });
       return;
     }
@@ -434,6 +418,15 @@ export const deleteChat = async (req: AuthenticatedRequest, res: Response, next:
       return;
     }
 
+    const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    const isOwner = chat.ownerId?.toString() === userId;
+    const isMember = members.includes(userId);
+
+    if (!isOwner && !isMember) {
+      res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
+      return;
+    }
+
     // Remove all messages associated with chatId
     await MessageModel.deleteMany({ chatId });
     await ChatModel.findByIdAndDelete(chatId);
@@ -454,6 +447,15 @@ export const getPublicChatMessages = async (req: AuthenticatedRequest, res: Resp
       return;
     }
 
+    const userId = req.user?._id?.toString();
+    const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    const isMember = userId ? members.includes(userId) : false;
+
+    if (!chat.isPublic && !isMember) {
+      res.status(403).json({ success: false, message: 'Bu chat maxfiy va siz unga a\'zo emassiz' });
+      return;
+    }
+
     const messages = await MessageModel.find({ chatId: chat._id.toString() }).sort({ createdAt: 1 });
     res.json({ success: true, messages });
   } catch (error) {
@@ -463,10 +465,17 @@ export const getPublicChatMessages = async (req: AuthenticatedRequest, res: Resp
 
 export const togglePinChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const userId = req.user?._id?.toString();
     const { chatId } = req.params;
     const chat = await ChatModel.findById(chatId);
     if (!chat) {
       res.status(404).json({ success: false, message: 'Chat topilmadi' });
+      return;
+    }
+
+    const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    if (userId && !members.includes(userId) && chat.ownerId?.toString() !== userId) {
+      res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
       return;
     }
 
@@ -480,10 +489,17 @@ export const togglePinChat = async (req: AuthenticatedRequest, res: Response, ne
 
 export const toggleMuteChat = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const userId = req.user?._id?.toString();
     const { chatId } = req.params;
     const chat = await ChatModel.findById(chatId);
     if (!chat) {
       res.status(404).json({ success: false, message: 'Chat topilmadi' });
+      return;
+    }
+
+    const members = Array.isArray(chat.members) ? chat.members.map((m) => m.toString()) : [];
+    if (userId && !members.includes(userId) && chat.ownerId?.toString() !== userId) {
+      res.status(403).json({ success: false, message: 'Ruxsat berilmadi' });
       return;
     }
 
