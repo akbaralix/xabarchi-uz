@@ -1,0 +1,15 @@
+12:14:17.766 Running build in Washington, D.C., USA (East) – iad1
+12:14:17.766 Build machine configuration: 2 cores, 8 GB
+12:14:17.809 Cloning github.com/akbaralix/xabarchi-uz (Branch: main, Commit: ae31143)
+12:14:17.810 Skipping build cache, deployment was triggered without cache.
+12:14:20.110 Cloning completed: 2.301s
+12:14:21.264 Running "vercel build"
+12:14:21.281 Vercel CLI 58.4.0
+12:14:21.868 Installing dependencies...
+12:14:29.386
+12:14:29.387 added 167 packages in 7s
+12:14:29.388
+12:14:29.388 22 packages are looking for funding
+12:14:29.388 run `npm fund` for details
+12:14:29.434 sh: line 1: cd: client: No such file or directory
+12:14:29.440 Error: Command "cd client && npm install && npm run build" exited with 1
