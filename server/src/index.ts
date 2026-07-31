@@ -230,6 +230,10 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(config.port, () => {
-  logger.info(`[Xabarchi Server] Running on http://localhost:${config.port}`);
-});
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
+  server.listen(config.port, () => {
+    logger.info(`[Xabarchi Server] Running on http://localhost:${config.port}`);
+  });
+}
+
+export default app;
