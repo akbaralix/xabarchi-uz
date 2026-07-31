@@ -1,0 +1,266 @@
+/* Message Composer Styles */
+
+.composer-container {
+  padding: 0.75rem;
+  background-color: #000000;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  user-select: none;
+}
+
+.banner-reply {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  background-color: #0B0B0B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.banner-edit {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.75rem;
+  background-color: #0B0B0B;
+  border: 1px solid rgba(34, 158, 217, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+}
+
+.banner-content-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.banner-text-box {
+  min-width: 0;
+}
+
+.banner-title {
+  font-weight: 600;
+  color: #229ED9;
+  font-size: 11px;
+  display: block;
+}
+
+.banner-desc {
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.btn-banner-close {
+  color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-banner-close:hover {
+  color: #ffffff;
+}
+
+.emoji-picker-popup {
+  position: absolute;
+  bottom: 4rem;
+  left: 1rem;
+  z-index: 30;
+  background-color: #0B0B0B;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.75rem;
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 16rem;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.emoji-item {
+  font-size: 1.25rem;
+  padding: 0.375rem;
+  background: transparent;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.emoji-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.channel-note {
+  margin-bottom: 0.5rem;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.recording-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #0B0B0B;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 1rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+}
+
+.recording-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #f87171;
+}
+
+.recording-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  background-color: #ef4444;
+}
+
+.recording-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-recording-cancel {
+  padding: 0.375rem;
+  color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-recording-cancel:hover {
+  color: #ffffff;
+}
+
+.btn-recording-send {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  background-color: #ef4444;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-recording-send:hover {
+  background-color: #dc2626;
+}
+
+.composer-main-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  background-color: #0B0B0B;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.btn-composer-icon {
+  color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+  border: none;
+  padding: 0.375rem;
+  border-radius: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-composer-icon:hover {
+  color: #ffffff;
+}
+
+.btn-composer-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.composer-textarea {
+  flex: 1 1 0%;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.75rem;
+  border: none;
+  outline: none;
+  resize: none;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  max-height: 8rem;
+  line-height: 1.625;
+}
+
+.composer-textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+@media (min-width: 640px) {
+  .composer-textarea {
+    font-size: 0.875rem;
+  }
+}
+
+.btn-composer-send {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  background-color: #229ED9;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-composer-send:hover:not(:disabled) {
+  background-color: rgba(34, 158, 217, 0.9);
+}
+
+.btn-composer-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-composer-mic {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-composer-mic:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.1);
+}

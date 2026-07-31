@@ -1,0 +1,157 @@
+/* Chat List Item Styles */
+
+.chat-list-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 1rem;
+  cursor: pointer;
+  user-select: none;
+  border-width: 1px;
+  border-style: solid;
+  transition: all 200ms ease;
+}
+
+.chat-list-item.item-active {
+  background-color: #0B0B0B;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.chat-list-item.item-inactive {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.chat-list-item.item-inactive:hover {
+  background-color: rgba(11, 11, 11, 0.6);
+}
+
+.avatar-wrapper-shrink {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.saved-avatar-pill {
+  width: 3rem; /* w-12 */
+  height: 3rem;
+  border-radius: 1rem;
+  background-color: rgba(34, 158, 217, 0.15);
+  border: 1px solid rgba(34, 158, 217, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #229ED9;
+}
+
+.chat-item-avatar-img {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chat-item-avatar-placeholder {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  background-color: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 1.125rem;
+}
+
+.online-dot-badge {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  background-color: #2ECC71;
+  border: 2px solid #000000;
+  border-radius: 9999px;
+}
+
+.chat-item-info {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.chat-item-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  margin-bottom: 0.125rem;
+}
+
+.chat-item-name-box {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.chat-item-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.chat-item-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chat-item-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.chat-typing-status {
+  font-size: 0.75rem;
+  color: #229ED9;
+  font-style: italic;
+  font-weight: 500;
+  margin: 0;
+}
+
+.chat-last-msg {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  margin: 0;
+}
+
+.chat-item-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+.unread-badge-pill {
+  padding: 0.125rem 0.5rem;
+  font-size: 10px;
+  font-weight: 700;
+  background-color: #229ED9;
+  color: #ffffff;
+  border-radius: 9999px;
+}

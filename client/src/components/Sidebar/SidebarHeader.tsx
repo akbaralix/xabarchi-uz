@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Search, Settings, Edit3, X, Archive, Bookmark, LogOut, Plus, Users, Megaphone, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Settings, Edit3, X, Archive, Bookmark, LogOut, Plus, Users, Megaphone, Lock, Loader2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { api } from '../../lib/api';
+import '../../styles/SidebarHeader.css';
 
 export const SidebarHeader: React.FC = () => {
   const { searchQuery, setSearchQuery, setIsSettingsOpen, user, logout, createChat, selectChat, chats } = useStore();
@@ -13,12 +14,60 @@ export const SidebarHeader: React.FC = () => {
   const [newChatDescription, setNewChatDescription] = useState('');
   const [isPublicChannel, setIsPublicChannel] = useState(true);
 
+  // New Chat Username Check
+  const [usernameCheck, setUsernameCheck] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string | null;
+    error: string | null;
+  }>({ checking: false, available: null, message: null, error: null });
+
+  useEffect(() => {
+    const clean = newChatUsername.trim().replace(/^@+/, '').toLowerCase();
+    
+    if (!clean) {
+      if (newChatType === 'channel' && isPublicChannel) {
+        setUsernameCheck({ checking: false, available: false, message: null, error: "Ochiq kanal uchun username kiritilishi shart" });
+      } else {
+        setUsernameCheck({ checking: false, available: null, message: null, error: null });
+      }
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,32}$/.test(clean)) {
+      setUsernameCheck({
+        checking: false,
+        available: false,
+        message: null,
+        error: "Username 3-32 ta kichik lotin harfi, raqam yoki '_' bo'lishi kerak"
+      });
+      return;
+    }
+
+    setUsernameCheck({ checking: true, available: null, message: null, error: null });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/api/chats/check-username/${encodeURIComponent(clean)}`);
+        if (res.data?.available) {
+          setUsernameCheck({ checking: false, available: true, message: "Bu username bo'sh va foydalanishga tayyor!", error: null });
+        } else {
+          setUsernameCheck({ checking: false, available: false, message: null, error: res.data?.message || "Bu username allaqachon band" });
+        }
+      } catch {
+        setUsernameCheck({ checking: false, available: false, message: null, error: "Tekshirishda xatolik bor" });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [newChatUsername, newChatType, isPublicChannel]);
+
   const resetForm = () => {
     setNewChatName('');
     setNewChatUsername('');
     setNewChatDescription('');
     setIsPublicChannel(true);
     setNewChatType('group');
+    setUsernameCheck({ checking: false, available: null, message: null, error: null });
   };
 
   const openCreateModal = (type: 'group' | 'channel') => {
@@ -64,36 +113,36 @@ export const SidebarHeader: React.FC = () => {
   };
 
   return (
-    <div className="p-3 border-b border-white/5 bg-[#000000] relative">
-      <div className="flex items-center gap-2">
-        <div className="relative">
+    <div className="sidebar-header-root">
+      <div className="sidebar-header-top">
+        <div className="menu-button-relative">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="w-10 h-10 rounded-xl bg-[#0B0B0B] border border-white/5 flex items-center justify-center text-white/70 hover:text-white transition-subtle cursor-pointer"
+            className="btn-sidebar-menu transition-subtle"
             title="Menyu"
           >
-            <div className="w-4 h-3.5 flex flex-col justify-between">
-              <span className="w-full h-0.5 bg-current rounded-full" />
-              <span className="w-3/4 h-0.5 bg-current rounded-full" />
-              <span className="w-full h-0.5 bg-current rounded-full" />
+            <div className="hamburger-wrapper">
+              <span className="hamburger-line-full" />
+              <span className="hamburger-line-three-quarter" />
+              <span className="hamburger-line-full" />
             </div>
           </button>
 
           {isMenuOpen && (
             <>
-              <div className="fixed inset-0 z-30" onClick={() => setIsMenuOpen(false)} />
-              <div className="absolute top-12 left-0 z-40 w-64 bg-[#0B0B0B] border border-white/10 rounded-2xl shadow-2xl p-2 space-y-1">
-                <div className="p-3 border-b border-white/5 flex items-center gap-3">
+              <div className="menu-backdrop" onClick={() => setIsMenuOpen(false)} />
+              <div className="menu-dropdown">
+                <div className="menu-user-info">
                   {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+                    <img src={user.avatarUrl} alt="Avatar" className="menu-user-avatar-img" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-[#229ED9]/20 text-[#229ED9] font-bold flex items-center justify-center">
+                    <div className="menu-user-avatar-placeholder">
                       {user?.firstName?.[0] || 'U'}
                     </div>
                   )}
-                  <div className="overflow-hidden">
-                    <p className="text-sm font-semibold text-white truncate">{user?.firstName} {user?.lastName}</p>
-                    <p className="text-xs text-white/40 truncate">@{user?.username || 'username'}</p>
+                  <div className="menu-user-text">
+                    <p className="menu-user-name">{user?.firstName} {user?.lastName}</p>
+                    <p className="menu-user-username">@{user?.username || 'username'}</p>
                   </div>
                 </div>
 
@@ -102,32 +151,32 @@ export const SidebarHeader: React.FC = () => {
                     setIsMenuOpen(false);
                     setIsSettingsOpen(true);
                   }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-white/80 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+                  className="btn-menu-item transition-subtle"
                 >
                   <Settings size={16} className="text-[#229ED9]" /> Sozlamalar
                 </button>
 
                 <button
                   onClick={openSavedMessages}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-white/80 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+                  className="btn-menu-item transition-subtle"
                 >
-                  <Bookmark size={16} className="text-emerald-400" /> Saqlangan xabarlar
+                  <Bookmark size={16} style={{ color: '#34d399' }} /> Saqlangan xabarlar
                 </button>
 
                 <button
                   onClick={() => setIsMenuOpen(false)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-white/80 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+                  className="btn-menu-item transition-subtle"
                 >
-                  <Archive size={16} className="text-amber-400" /> Arxiv
+                  <Archive size={16} style={{ color: '#fbbf24' }} /> Arxiv
                 </button>
 
-                <div className="border-t border-white/5 pt-1">
+                <div className="menu-footer-border">
                   <button
                     onClick={() => {
                       setIsMenuOpen(false);
                       void handleLogout();
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
+                    className="btn-menu-logout transition-subtle"
                   >
                     <LogOut size={16} /> Tizimdan chiqish
                   </button>
@@ -137,19 +186,19 @@ export const SidebarHeader: React.FC = () => {
           )}
         </div>
 
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 text-white/40" size={16} />
+        <div className="search-input-wrapper">
+          <Search className="search-icon-left" size={16} />
           <input
             type="text"
             placeholder="Qidiruv..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-[#0B0B0B] border border-white/5 text-white text-xs rounded-xl pl-9 pr-8 py-2.5 outline-none focus:border-[#229ED9]/50 transition-subtle placeholder:text-white/40"
+            className="search-input-field transition-subtle"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-white/40 hover:text-white transition-subtle"
+              className="btn-search-clear transition-subtle"
             >
               <X size={14} />
             </button>
@@ -158,38 +207,38 @@ export const SidebarHeader: React.FC = () => {
 
         <button
           onClick={() => openCreateModal('group')}
-          className="w-10 h-10 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] hover:bg-[#229ED9]/25 transition-subtle cursor-pointer shrink-0"
+          className="btn-create-chat-icon transition-subtle"
           title="Yangi Guruh yoki Kanal"
         >
           <Edit3 size={18} />
         </button>
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-[11px] text-white/40">
+      <div className="quick-tags-row">
         <button
           onClick={() => openCreateModal('group')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-subtle"
+          className="btn-quick-tag transition-subtle"
         >
           <Users size={12} /> Guruh Yaratish
         </button>
         <button
           onClick={() => openCreateModal('channel')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white/5 hover:bg-white/10 transition-subtle"
+          className="btn-quick-tag transition-subtle"
         >
           <Megaphone size={12} /> Kanal Yaratish
         </button>
       </div>
 
       {isNewChatOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="create-modal-overlay">
+          <div className="create-modal-card">
+            <div className="create-modal-header">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="create-modal-title">
                   {newChatType === 'group' ? <Users size={18} className="text-[#229ED9]" /> : <Megaphone size={18} className="text-[#229ED9]" />}
                   {newChatType === 'group' ? 'Yangi guruh' : 'Yangi kanal'}
                 </h3>
-                <p className="text-xs text-white/45 mt-1">
+                <p className="create-modal-desc">
                   {newChatType === 'group'
                     ? 'Guruh nomi va tavsifni kiriting.'
                     : 'Kanal nomi va username belgilang. Kanal postlari obunachilarga ko‘rinadi.'}
@@ -200,32 +249,32 @@ export const SidebarHeader: React.FC = () => {
                   setIsNewChatOpen(false);
                   resetForm();
                 }}
-                className="text-white/40 hover:text-white transition-subtle"
+                className="btn-create-modal-close transition-subtle"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-5">
+            <div className="create-type-switcher">
               <button
                 type="button"
                 onClick={() => setNewChatType('group')}
-                className={`py-2.5 rounded-2xl text-xs font-semibold transition-subtle cursor-pointer ${newChatType === 'group' ? 'bg-[#229ED9] text-white' : 'bg-[#111111] text-white/60'}`}
+                className={`btn-type-tab transition-subtle ${newChatType === 'group' ? 'tab-active' : 'tab-inactive'}`}
               >
                 Guruh
               </button>
               <button
                 type="button"
                 onClick={() => setNewChatType('channel')}
-                className={`py-2.5 rounded-2xl text-xs font-semibold transition-subtle cursor-pointer ${newChatType === 'channel' ? 'bg-[#229ED9] text-white' : 'bg-[#111111] text-white/60'}`}
+                className={`btn-type-tab transition-subtle ${newChatType === 'channel' ? 'tab-active' : 'tab-inactive'}`}
               >
                 Kanal
               </button>
             </div>
 
-            <form onSubmit={handleCreateNewChat} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateNewChat} className="create-chat-form">
               <div>
-                <label className="block text-white/50 mb-1 font-medium">
+                <label className="create-field-label">
                   {newChatType === 'group' ? 'Guruh nomi' : 'Kanal nomi'}
                 </label>
                 <input
@@ -233,13 +282,13 @@ export const SidebarHeader: React.FC = () => {
                   placeholder={newChatType === 'group' ? 'Masalan: Dasturchilar guruhi' : 'Masalan: Xabarchi News'}
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
-                  className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
+                  className="create-input-field"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-white/50 mb-1 font-medium">
+                <label className="create-field-label">
                   {newChatType === 'channel' ? 'Kanal username' : 'Username (ixtiyoriy)'}
                 </label>
                 <input
@@ -247,47 +296,67 @@ export const SidebarHeader: React.FC = () => {
                   placeholder={newChatType === 'channel' ? '@xabarchi_news' : '@dev_group'}
                   value={newChatUsername}
                   onChange={(e) => setNewChatUsername(e.target.value)}
-                  className="w-full bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9]"
+                  className={`create-input-field ${usernameCheck.error ? 'border-red-500' : usernameCheck.available ? 'border-emerald-500' : ''}`}
                 />
+                {usernameCheck.checking && (
+                  <p style={{ fontSize: '11px', color: '#93c5fd', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Loader2 size={12} className="animate-spin" /> Username tekshirilmoqda...
+                  </p>
+                )}
+                {usernameCheck.error && (
+                  <p style={{ fontSize: '11px', color: '#f87171', marginTop: '4px', fontWeight: 500 }}>
+                    ⚠️ {usernameCheck.error}
+                  </p>
+                )}
+                {usernameCheck.available && usernameCheck.message && (
+                  <p style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 500 }}>
+                    ✓ {usernameCheck.message}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-white/50 mb-1 font-medium">Tavsif</label>
+                <label className="create-field-label">Tavsif</label>
                 <textarea
                   placeholder={newChatType === 'channel' ? 'Kanal tavsifi' : 'Guruh tavsifi'}
                   value={newChatDescription}
                   onChange={(e) => setNewChatDescription(e.target.value)}
-                  className="w-full min-h-24 bg-[#111111] border border-white/10 text-white rounded-2xl px-3 py-3 outline-none focus:border-[#229ED9] resize-none"
+                  className="create-textarea-field"
                 />
               </div>
 
               {newChatType === 'channel' && (
-                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-[#111111] border border-white/10">
+                <div className="create-public-switch-box">
                   <div>
-                    <p className="text-white font-medium">Ochiq kanal</p>
-                    <p className="text-[11px] text-white/40">Boshqalar username orqali topa oladi.</p>
+                    <p style={{ color: '#ffffff', fontWeight: 500, margin: 0 }}>Ochiq kanal</p>
+                    <p style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.4)', margin: 0 }}>Boshqalar username orqali topa oladi.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsPublicChannel(!isPublicChannel)}
-                    className={`w-14 h-8 rounded-full border transition-subtle relative ${isPublicChannel ? 'bg-[#229ED9] border-[#229ED9]' : 'bg-white/10 border-white/10'}`}
+                    className={`create-switch-track transition-subtle ${isPublicChannel ? 'track-active' : 'track-inactive'}`}
                   >
-                    <span className={`absolute top-1 w-6 h-6 rounded-full bg-white transition-transform ${isPublicChannel ? 'translate-x-6' : 'translate-x-1'}`} />
+                    <span className={`create-switch-thumb ${isPublicChannel ? 'thumb-active' : 'thumb-inactive'}`} />
                   </button>
                 </div>
               )}
 
               {newChatType === 'group' && (
-                <div className="flex items-center gap-2 p-3 rounded-2xl bg-[#111111] border border-white/10 text-[11px] text-white/45">
-                  <Lock size={14} className="text-white/45" />
+                <div className="group-privacy-note">
+                  <Lock size={14} style={{ color: 'rgba(255, 255, 255, 0.45)' }} />
                   Guruhda xabarlar ikki tomonlama bo'ladi va suhbat erkin davom etadi.
                 </div>
               )}
 
-              <div className="pt-2">
+              <div style={{ paddingTop: '0.5rem' }}>
                 <button
                   type="submit"
-                  className="w-full bg-[#229ED9] text-white font-medium py-3 rounded-2xl flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={Boolean(usernameCheck.error) || usernameCheck.checking || !newChatName.trim()}
+                  className={`btn-submit-create-chat transition-subtle ${
+                    usernameCheck.error || usernameCheck.checking || !newChatName.trim()
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                      : ''
+                  }`}
                 >
                   <Plus size={16} />
                   {newChatType === 'group' ? 'Guruh yaratish' : 'Kanal yaratish'}

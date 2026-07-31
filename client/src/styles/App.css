@@ -1,0 +1,69 @@
+/* App Component Styles */
+
+.auth-checking-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  align-items: center;
+  justify-content: center;
+  background-color: #000000;
+  color: #ffffff;
+}
+
+.auth-checking {
+  width: 160px;
+}
+.auth-checking img {
+  width: 100%;
+  height: 100%;
+}
+
+.app-root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #000000;
+  color: #ffffff;
+  overflow: hidden;
+  user-select: none;
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  position: relative;
+}
+
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.app-sidebar-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+}
+
+.app-chat-container {
+  height: 100%;
+  flex: 1 1 0%;
+  display: flex;
+}
+
+/* Responsive visibility rules */
+.hidden-on-mobile {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .app-sidebar-container {
+    width: auto !important;
+    display: flex !important;
+  }
+
+  .app-chat-container {
+    display: flex !important;
+  }
+}

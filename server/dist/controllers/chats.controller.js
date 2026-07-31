@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toggleMuteChat = exports.togglePinChat = exports.getPublicChatMessages = exports.leaveChat = exports.joinChat = exports.openDirectChatByUsername = exports.getPublicChatByUsername = exports.createChat = exports.checkUsernameAvailability = exports.getChats = void 0;
+exports.toggleMuteChat = exports.togglePinChat = exports.getPublicChatMessages = exports.deleteChat = exports.leaveChat = exports.joinChat = exports.openDirectChatByUsername = exports.getPublicChatByUsername = exports.createChat = exports.searchAll = exports.checkUsernameAvailability = exports.getChats = void 0;
 const zod_1 = require("zod");
 const Chat_js_1 = require("../models/Chat.js");
 const User_js_1 = require("../models/User.js");
@@ -36,7 +36,6 @@ const getChats = async (req, res, next) => {
             res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
             return;
         }
-        // Ensure Saved Messages chat exists for user
         let savedChat = await Chat_js_1.ChatModel.findOne({ ownerId: userId, type: 'saved' });
         if (!savedChat) {
             savedChat = await Chat_js_1.ChatModel.create({
@@ -54,7 +53,6 @@ const getChats = async (req, res, next) => {
                 description: `Sizning shaxsiy saqlangan xabarlaringiz va fayllaringiz, ${req.user?.firstName}.`
             });
         }
-        // Find chats where user is member or public channels/groups
         const userChats = await Chat_js_1.ChatModel.find({
             $or: [
                 { members: userId },
@@ -75,6 +73,7 @@ exports.getChats = getChats;
 const checkUsernameAvailability = async (req, res, next) => {
     try {
         const username = normalizeUsername(req.params.username || '');
+        const currentId = req.query.currentId || req.query.excludeId || '';
         if (!isValidUsername(username)) {
             res.json({
                 success: true,
@@ -86,12 +85,14 @@ const checkUsernameAvailability = async (req, res, next) => {
         }
         const existingChat = await Chat_js_1.ChatModel.findOne({ username });
         const existingUser = await User_js_1.UserModel.findOne({ username });
-        if (existingChat || existingUser) {
+        const isMatchCurrentChat = existingChat && currentId && existingChat._id.toString() === currentId;
+        const isMatchCurrentUser = existingUser && currentId && existingUser._id.toString() === currentId;
+        if ((existingChat && !isMatchCurrentChat) || (existingUser && !isMatchCurrentUser)) {
             res.json({
                 success: true,
                 available: false,
                 reason: 'taken',
-                message: 'Bu username band'
+                message: 'Bu username allaqachon band'
             });
             return;
         }
@@ -102,6 +103,79 @@ const checkUsernameAvailability = async (req, res, next) => {
     }
 };
 exports.checkUsernameAvailability = checkUsernameAvailability;
+const searchAll = async (req, res, next) => {
+    try {
+        const query = (req.query.q || '').trim();
+        if (!query || query.length < 1) {
+            res.json({
+                success: true,
+                users: [],
+                channels: [],
+                groups: []
+            });
+            return;
+        }
+        const isAtSearch = query.startsWith('@');
+        const cleanQuery = normalizeUsername(query);
+        const regex = new RegExp(cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        const userId = req.user?._id?.toString();
+        // 1. Search Users
+        const usersRaw = await User_js_1.UserModel.find({
+            $or: [
+                { username: regex },
+                { firstName: regex },
+                { lastName: regex }
+            ]
+        }).limit(20);
+        const users = usersRaw
+            .filter((u) => u._id.toString() !== userId)
+            .map((u) => ({
+            id: u._id.toString(),
+            firstName: u.firstName,
+            lastName: u.lastName || '',
+            username: u.username || '',
+            avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username || u._id.toString()}`,
+            bio: u.bio || '',
+            isOnline: Boolean(u.isOnline)
+        }));
+        // 2. Search Channels
+        const channelsRaw = await Chat_js_1.ChatModel.find({
+            type: 'channel',
+            $or: [
+                { name: regex },
+                { username: regex }
+            ]
+        }).limit(20);
+        const channels = channelsRaw.map((c) => serializeChat(c, userId));
+        // 3. Search Groups
+        const groupsRaw = await Chat_js_1.ChatModel.find({
+            type: 'group',
+            $or: [
+                { name: regex },
+                { username: regex }
+            ]
+        }).limit(20);
+        const groups = groupsRaw.map((c) => serializeChat(c, userId));
+        // If search started with @, sort exact username match to top
+        if (isAtSearch && cleanQuery) {
+            users.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+            channels.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+            groups.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+        }
+        res.json({
+            success: true,
+            query: cleanQuery,
+            isAtSearch,
+            users,
+            channels,
+            groups
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.searchAll = searchAll;
 const CreateChatSchema = zod_1.z.object({
     name: zod_1.z.string().min(1, 'Chat nomi kiritilishi shart'),
     type: zod_1.z.enum(['group', 'channel']),
@@ -126,8 +200,9 @@ const createChat = async (req, res, next) => {
                 return;
             }
             const existingChat = await Chat_js_1.ChatModel.findOne({ username: normalizedUsername });
-            if (existingChat) {
-                res.status(409).json({ success: false, message: 'Bu username band' });
+            const existingUser = await User_js_1.UserModel.findOne({ username: normalizedUsername });
+            if (existingChat || existingUser) {
+                res.status(409).json({ success: false, message: 'Bu username allaqachon band' });
                 return;
             }
         }
@@ -204,7 +279,6 @@ const openDirectChatByUsername = async (req, res, next) => {
             res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
             return;
         }
-        // If opening direct chat with self, return Saved Messages chat
         if (req.user?.username && normalizeUsername(req.user.username) === username) {
             let savedChat = await Chat_js_1.ChatModel.findOne({ ownerId: userId, type: 'saved' });
             if (!savedChat) {
@@ -224,14 +298,12 @@ const openDirectChatByUsername = async (req, res, next) => {
             res.json({ success: true, chat: serializeChat(savedChat, userId) });
             return;
         }
-        // Find target user in DB
         const targetUser = await User_js_1.UserModel.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
         if (!targetUser) {
             res.status(404).json({ success: false, message: 'Bunday username bilan foydalanuvchi topilmadi' });
             return;
         }
         const targetUserId = targetUser._id.toString();
-        // Check if direct chat already exists between these 2 users
         let chat = await Chat_js_1.ChatModel.findOne({
             type: 'user',
             members: { $all: [userId, targetUserId] }
@@ -308,6 +380,33 @@ const leaveChat = async (req, res, next) => {
     }
 };
 exports.leaveChat = leaveChat;
+const deleteChat = async (req, res, next) => {
+    try {
+        const userId = req.user?._id?.toString();
+        const { chatId } = req.params;
+        if (!userId) {
+            res.status(401).json({ success: false, message: 'Autentifikatsiya talab qilinadi' });
+            return;
+        }
+        const chat = await Chat_js_1.ChatModel.findById(chatId);
+        if (!chat) {
+            res.status(404).json({ success: false, message: 'Chat topilmadi' });
+            return;
+        }
+        if (chat.type === 'saved') {
+            res.status(400).json({ success: false, message: 'Saqlangan xabarlar chatini o\'chirib bo\'lmaydi' });
+            return;
+        }
+        // Remove all messages associated with chatId
+        await Message_js_1.MessageModel.deleteMany({ chatId });
+        await Chat_js_1.ChatModel.findByIdAndDelete(chatId);
+        res.json({ success: true, chatId, message: 'Chat va barcha xabarlar o\'chirildi' });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.deleteChat = deleteChat;
 const getPublicChatMessages = async (req, res, next) => {
     try {
         const username = normalizeUsername(req.params.username || '');

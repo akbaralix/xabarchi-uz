@@ -11,6 +11,7 @@ import {
 import { api } from "../../lib/api";
 import type { Chat, Message } from "../../types";
 import { useStore } from "../../store/useStore";
+import "../../styles/PublicChatPage.css";
 
 interface Props {
   username: string;
@@ -145,8 +146,8 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#000000] text-white select-none font-sans">
-        <div className="flex items-center gap-2 text-white/60 text-sm">
+      <div className="public-loading-root">
+        <div className="public-loading-box">
           <Loader2 size={18} className="animate-spin text-[#229ED9]" />
           Yuklanmoqda...
         </div>
@@ -157,18 +158,18 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
   // --- 404 NOT FOUND VIEW ---
   if (notFound) {
     return (
-      <div className="flex h-screen w-screen bg-[#000000] text-white justify-center items-center p-4 select-none font-sans">
-        <div className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-3xl bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30] mb-4">
+      <div className="public-page-container">
+        <div className="public-card">
+          <div className="not-found-icon-box">
             <UserX size={40} />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Bunday profil yoki chat topilmadi</h2>
-          <p className="text-xs text-white/50 leading-relaxed mb-6">
+          <h2 className="not-found-title">Bunday profil yoki chat topilmadi</h2>
+          <p className="not-found-desc">
             <b>@{username}</b> nomli foydalanuvchi, guruh yoki kanal ma'lumotlar bazasida mavjud emas.
           </p>
           <button
             onClick={() => window.location.assign("/")}
-            className="w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold text-xs py-3.5 rounded-2xl transition-subtle flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#229ED9]/20"
+            className="btn-back-home transition-subtle"
           >
             <ArrowLeft size={16} /> Bosh sahifaga qaytish
           </button>
@@ -182,63 +183,63 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
     const displayName = `${userData.firstName} ${userData.lastName || ""}`.trim();
 
     return (
-      <div className="flex h-screen w-screen bg-[#000000] text-white justify-center items-center p-4 select-none relative overflow-hidden font-sans">
-        <div className="w-full max-w-md bg-[#0B0B0B] border border-white/10 rounded-3xl p-8 shadow-2xl relative flex flex-col items-center text-center">
+      <div className="public-page-container">
+        <div className="public-card">
           <button
             onClick={() => window.location.assign("/")}
-            className="absolute top-5 left-5 w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-subtle cursor-pointer"
+            className="btn-profile-back transition-subtle"
             title="Orqaga"
           >
             <ArrowLeft size={18} />
           </button>
 
           {/* Profile Avatar */}
-          <div className="relative mb-4 mt-2">
+          <div className="profile-avatar-container">
             {userData.avatarUrl ? (
               <img
                 src={userData.avatarUrl}
                 alt={displayName}
-                className="w-28 h-28 rounded-full object-cover border-2 border-[#229ED9]/40 p-0.5 shadow-xl"
+                className="profile-avatar-img"
               />
             ) : (
-              <div className="w-28 h-28 rounded-full bg-[#229ED9]/20 text-[#229ED9] text-4xl font-bold flex items-center justify-center border-2 border-[#229ED9]/40 shadow-xl">
+              <div className="profile-avatar-placeholder">
                 {displayName[0]?.toUpperCase() || "U"}
               </div>
             )}
             {userData.isOnline && (
               <span
-                className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#34C759] border-2 border-[#0B0B0B]"
+                className="online-badge"
                 title="Tarmoqda online"
               />
             )}
           </div>
 
           {/* Name & Username */}
-          <h2 className="text-2xl font-bold text-white tracking-tight flex items-center gap-1.5 justify-center">
+          <h2 className="profile-display-name">
             {displayName}
             <ShieldCheck size={18} className="text-[#229ED9]" />
           </h2>
-          <p className="text-sm font-medium text-[#229ED9] mt-1">
+          <p className="profile-username">
             @{userData.username || username}
           </p>
 
           {/* Bio section */}
-          <div className="mt-4 p-3 rounded-2xl bg-white/5 border border-white/5 w-full text-xs text-white/70 leading-relaxed">
+          <div className="profile-bio-box">
             {userData.bio || "Xabarchi ilovasidan foydalanmoqda ✨"}
           </div>
 
           {/* Telegram Send Message Button */}
-          <div className="w-full space-y-3 mt-6">
+          <div className="profile-btn-group">
             <button
               onClick={handleOpenDirectChat}
               disabled={isOpeningChat}
-              className="w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold text-sm py-3.5 px-4 rounded-2xl transition-subtle flex items-center justify-center gap-2.5 shadow-lg shadow-[#229ED9]/20 cursor-pointer disabled:opacity-50"
+              className="btn-send-message-public transition-subtle"
             >
               {isOpeningChat ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 <>
-                  <Send size={16} className="transform -rotate-12" />
+                  <Send size={16} style={{ transform: 'rotate(-12deg)' }} />
                   <span>Xabar yozish</span>
                 </>
               )}
@@ -246,7 +247,7 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
 
             <button
               onClick={handleCopyUsername}
-              className="w-full bg-white/5 hover:bg-white/10 text-white/80 hover:text-white font-medium text-xs py-3 px-4 rounded-2xl border border-white/5 transition-subtle flex items-center justify-center gap-2 cursor-pointer"
+              className="btn-copy-link-public transition-subtle"
             >
               {copied ? (
                 <>
@@ -266,58 +267,58 @@ export const PublicChatPage: React.FC<Props> = ({ username }) => {
 
   // --- CHANNEL / GROUP PUBLIC VIEW ---
   return (
-    <div className="flex h-screen w-screen bg-[#000000] text-white overflow-hidden select-none font-sans">
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="h-16 px-4 border-b border-white/5 flex items-center justify-between bg-[#000000]">
-          <div className="flex items-center gap-3 min-w-0">
+    <div className="public-channel-layout">
+      <main className="public-channel-main">
+        <div className="public-channel-header">
+          <div className="public-channel-header-info">
             <button
               onClick={() => window.location.assign("/")}
-              className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-subtle"
+              className="btn-channel-back transition-subtle"
               title="Orqaga"
             >
               <ArrowLeft size={18} />
             </button>
-            <div className="min-w-0">
-              <h1 className="text-sm font-semibold truncate">
+            <div className="public-channel-header-text">
+              <h1 className="public-channel-title">
                 {chat?.name || username}
               </h1>
-              <p className="text-[11px] text-white/45 truncate">@{username}</p>
+              <p className="public-channel-username">@{username}</p>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div className="public-channel-messages">
           {messages.length > 0 ? (
             messages.map((message) => (
-              <div key={message.id} className="max-w-3xl mx-auto">
-                <div className="rounded-2xl border border-white/5 bg-[#0B0B0B] p-3">
+              <div key={message.id} className="public-message-wrapper">
+                <div className="public-message-card">
                   {message.senderName && (
-                    <p className="text-[11px] font-semibold text-[#229ED9] mb-1">
+                    <p className="public-msg-sender">
                       {message.senderName}
                     </p>
                   )}
                   {message.text && (
-                    <p className="text-sm text-white whitespace-pre-wrap break-words">
+                    <p className="public-msg-text">
                       {message.text}
                     </p>
                   )}
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-white/40">
+                  <div className="public-msg-meta">
                     <span>{message.time}</span>
                   </div>
                 </div>
               </div>
             ))
           ) : (
-            <div className="h-full flex items-center justify-center text-white/40 text-sm">
+            <div className="public-no-messages">
               Hozircha xabar yo‘q
             </div>
           )}
         </div>
 
-        <div className="border-t border-white/5 p-4 bg-[#000000]">
+        <div className="public-channel-footer">
           <button
             onClick={handleOpenDirectChat}
-            className="w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold text-sm py-3.5 rounded-2xl flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#229ED9]/20"
+            className="btn-open-chat-public"
           >
             <Send size={16} /> Chatni ochish
           </button>

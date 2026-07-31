@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { config } from '../config/index.js';
 import { botAuthService } from '../services/bot.service.js';
 import { UserModel, IUser } from '../models/User.js';
+import { ChatModel } from '../models/Chat.js';
 import { AuthenticatedRequest } from '../middlewares/auth.middleware.js';
 
 const AUTH_COOKIE_NAME = 'xabarchi_auth';
@@ -268,11 +269,17 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response, ne
 
     const updates = UpdateProfileSchema.parse(req.body);
 
-    if (updates.username && updates.username !== req.user.username) {
-      const existing = await UserModel.findOne({ username: updates.username });
-      if (existing) {
-        res.status(400).json({ success: false, message: 'Ushbu username band' });
-        return;
+    if (updates.username) {
+      const cleanUsername = updates.username.trim().replace(/^@+/, '').toLowerCase();
+      updates.username = cleanUsername;
+
+      if (cleanUsername !== req.user.username) {
+        const existingUser = await UserModel.findOne({ username: cleanUsername });
+        const existingChat = await ChatModel.findOne({ username: cleanUsername });
+        if (existingUser || existingChat) {
+          res.status(400).json({ success: false, message: 'Bu username allaqachon band' });
+          return;
+        }
       }
     }
 

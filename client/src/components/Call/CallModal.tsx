@@ -3,6 +3,7 @@ import { Phone, PhoneOff, Video, VideoOff, Mic, MicOff, Volume2 } from 'lucide-r
 import { socket } from '../../lib/socket';
 import { useStore } from '../../store/useStore';
 import type { CallData } from '../../types';
+import '../../styles/CallModal.css';
 
 interface Props {
   activeCall: CallData | null;
@@ -199,36 +200,36 @@ export const CallModal: React.FC<Props> = ({ activeCall, onEndCall }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-lg p-4 select-none font-sans">
-      <div className="w-full max-w-lg bg-[#0B0B0B] border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center relative overflow-hidden">
+    <div className="call-modal-overlay">
+      <div className="call-modal-card">
         {activeCall.isVideo && callStatus === 'connected' ? (
-          <div className="w-full h-80 bg-[#000000] rounded-2xl overflow-hidden relative border border-white/10 mb-6">
-            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            <video ref={localVideoRef} autoPlay playsInline muted className="absolute bottom-3 right-3 w-28 h-20 object-cover rounded-xl border border-white/20 shadow-lg" />
+          <div className="video-call-box">
+            <video ref={remoteVideoRef} autoPlay playsInline className="remote-video-feed" />
+            <video ref={localVideoRef} autoPlay playsInline muted className="local-video-feed" />
           </div>
         ) : (
-          <div className="flex flex-col items-center my-6">
-            <div className="relative mb-4">
+          <div className="voice-call-box">
+            <div className="avatar-pulse-wrapper">
               <img
                 src={activeCall.callerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeCall.callerName}`}
                 alt={activeCall.callerName}
-                className="w-28 h-28 rounded-full object-cover border-4 border-[#229ED9]/30 shadow-2xl animate-pulse"
+                className="call-avatar-img animate-pulse"
               />
-              <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#229ED9] flex items-center justify-center text-white shadow-lg">
+              <div className="call-volume-icon">
                 <Volume2 size={16} />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-1">{activeCall.callerName}</h3>
-            <p className="text-xs text-[#229ED9] font-medium">
+            <h3 className="call-caller-name">{activeCall.callerName}</h3>
+            <p className="call-status-label">
               {callStatus === 'calling' ? "Qo'ng'iroq qilinmoqda..." : callStatus === 'incoming' ? "Kiruvchi qo'ng'iroq..." : formatDuration(duration)}
             </p>
           </div>
         )}
 
-        <div className="flex items-center gap-4 mt-2">
+        <div className="call-actions-row">
           <button
             onClick={toggleMute}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-subtle cursor-pointer ${isMuted ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            className={`btn-call-toggle transition-subtle ${isMuted ? 'btn-call-active-alert' : 'btn-call-normal'}`}
             title={isMuted ? "Mikrofonni yoqish" : "Mikrofonni o'chirish"}
           >
             {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
@@ -237,7 +238,7 @@ export const CallModal: React.FC<Props> = ({ activeCall, onEndCall }) => {
           {activeCall.isVideo && (
             <button
               onClick={toggleVideo}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-subtle cursor-pointer ${!isVideoEnabled ? 'bg-red-500/20 text-red-500 border border-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              className={`btn-call-toggle transition-subtle ${!isVideoEnabled ? 'btn-call-active-alert' : 'btn-call-normal'}`}
               title={!isVideoEnabled ? "Kamerani yoqish" : "Kamerani o'chirish"}
             >
               {!isVideoEnabled ? <VideoOff size={20} /> : <Video size={20} />}
@@ -248,14 +249,14 @@ export const CallModal: React.FC<Props> = ({ activeCall, onEndCall }) => {
             <>
               <button
                 onClick={handleAcceptCall}
-                className="w-14 h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 cursor-pointer"
+                className="btn-call-accept"
                 title="Qabul qilish"
               >
                 <Phone size={24} />
               </button>
               <button
                 onClick={handleRejectCall}
-                className="w-14 h-14 rounded-2xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-500/30 cursor-pointer"
+                className="btn-call-reject"
                 title="Rad etish"
               >
                 <PhoneOff size={24} />
@@ -264,7 +265,7 @@ export const CallModal: React.FC<Props> = ({ activeCall, onEndCall }) => {
           ) : (
             <button
               onClick={handleEndCall}
-              className="w-14 h-14 rounded-2xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-500/30 cursor-pointer"
+              className="btn-call-reject"
               title="Qo'ng'iroqni yakunlash"
             >
               <PhoneOff size={24} />

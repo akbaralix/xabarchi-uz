@@ -8,6 +8,7 @@ import { useStore } from '../../store/useStore';
 import { socket } from '../../lib/socket';
 import type { CallData } from '../../types';
 import { MessageSquare } from 'lucide-react';
+import '../../styles/ChatArea.css';
 
 export const ChatArea: React.FC = () => {
   const { activeChatId, chats, messagesMap, pinMessage, user } = useStore();
@@ -63,12 +64,12 @@ export const ChatArea: React.FC = () => {
 
   if (!currentChat) {
     return (
-      <div className="flex-1 h-full bg-[#000000] flex flex-col items-center justify-center p-6 text-center select-none">
-        <div className="w-16 h-16 rounded-2xl bg-[#0B0B0B] border border-white/5 flex items-center justify-center text-white/30 mb-4">
+      <div className="chat-area-empty">
+        <div className="empty-icon-wrapper">
           <MessageSquare size={32} />
         </div>
-        <h3 className="text-base font-semibold text-white mb-1">Muloqotni tanlang</h3>
-        <p className="text-xs text-white/40 max-w-xs">
+        <h3 className="empty-title">Muloqotni tanlang</h3>
+        <p className="empty-subtitle">
           Xabar yuborish va suhbatlashish uchun chap paneldan biror foydalanuvchi yoki guruhni tanlang.
         </p>
       </div>
@@ -76,7 +77,7 @@ export const ChatArea: React.FC = () => {
   }
 
   return (
-    <main className="flex-1 h-full bg-[#000000] flex flex-col min-w-0 relative">
+    <main className="chat-area-main">
       <ChatHeader onStartCall={handleStartCall} />
       {pinnedMessage && (
         <PinnedMessageBar
@@ -86,9 +87,9 @@ export const ChatArea: React.FC = () => {
       )}
 
       {/* Messages Stream */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        <div className="flex justify-center my-3 select-none">
-          <span className="px-3 py-1 bg-[#0B0B0B] border border-white/5 text-[11px] font-medium text-white/50 rounded-full">
+      <div className="messages-stream">
+        <div className="date-badge-wrapper">
+          <span className="date-badge-pill">
             Bugun
           </span>
         </div>

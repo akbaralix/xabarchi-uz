@@ -9,6 +9,7 @@ const zod_1 = require("zod");
 const index_js_1 = require("../config/index.js");
 const bot_service_js_1 = require("../services/bot.service.js");
 const User_js_1 = require("../models/User.js");
+const Chat_js_1 = require("../models/Chat.js");
 const AUTH_COOKIE_NAME = 'xabarchi_auth';
 const REFRESH_COOKIE_NAME = 'xabarchi_refresh';
 const AUTH_COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -250,11 +251,16 @@ const updateProfile = async (req, res, next) => {
             return;
         }
         const updates = UpdateProfileSchema.parse(req.body);
-        if (updates.username && updates.username !== req.user.username) {
-            const existing = await User_js_1.UserModel.findOne({ username: updates.username });
-            if (existing) {
-                res.status(400).json({ success: false, message: 'Ushbu username band' });
-                return;
+        if (updates.username) {
+            const cleanUsername = updates.username.trim().replace(/^@+/, '').toLowerCase();
+            updates.username = cleanUsername;
+            if (cleanUsername !== req.user.username) {
+                const existingUser = await User_js_1.UserModel.findOne({ username: cleanUsername });
+                const existingChat = await Chat_js_1.ChatModel.findOne({ username: cleanUsername });
+                if (existingUser || existingChat) {
+                    res.status(400).json({ success: false, message: 'Bu username allaqachon band' });
+                    return;
+                }
             }
         }
         Object.assign(req.user, updates);

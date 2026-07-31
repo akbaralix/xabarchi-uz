@@ -182,7 +182,7 @@ export const useStore = create<AppState>((set, get) => ({
       set((state) => {
         const nextActiveId = state.activeChatId && allChats.some((c: Chat) => c.id === state.activeChatId)
           ? state.activeChatId
-          : savedChat.id;
+          : null;
 
         return {
           chats: allChats,
@@ -190,7 +190,7 @@ export const useStore = create<AppState>((set, get) => ({
         };
       });
 
-      const currentActiveId = get().activeChatId || savedChat.id;
+      const currentActiveId = get().activeChatId;
       if (currentActiveId) {
         void get().loadMessages(currentActiveId);
       }
@@ -200,7 +200,7 @@ export const useStore = create<AppState>((set, get) => ({
         chats: state.chats.length > 0 ? state.chats : [savedChat],
         activeChatId: state.activeChatId && state.chats.some((chat) => chat.id === state.activeChatId)
           ? state.activeChatId
-          : savedChat.id
+          : null
       }));
     }
   },

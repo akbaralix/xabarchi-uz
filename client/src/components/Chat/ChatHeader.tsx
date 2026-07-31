@@ -1,6 +1,7 @@
 import React from 'react';
 import { Phone, Video, Search, PanelRight, Bookmark, ArrowLeft, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
+import '../../styles/ChatHeader.css';
 
 interface Props {
   onStartCall?: (isVideo: boolean) => void;
@@ -38,48 +39,48 @@ export const ChatHeader: React.FC<Props> = ({ onStartCall }) => {
   };
 
   return (
-    <div className="h-16 px-3 md:px-4 bg-[#000000] border-b border-white/5 flex items-center justify-between shrink-0 select-none z-10">
+    <div className="chat-header">
       {/* Mobile Back Button & User/Group Info */}
-      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+      <div className="chat-header-info-wrapper">
         <button
           onClick={() => selectChat(null)}
-          className="md:hidden text-white/70 hover:text-white p-2 rounded-xl active:bg-white/10 transition-subtle shrink-0 cursor-pointer"
+          className="btn-mobile-back transition-subtle"
           title="Muloqotlar ro'yxatiga qaytish"
         >
           <ArrowLeft size={20} />
         </button>
 
         <div
-          className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+          className="chat-header-info"
           onClick={toggleRightPanel}
         >
           {currentChat.type === 'saved' ? (
-            <div className="w-10 h-10 rounded-2xl bg-[#229ED9]/15 border border-[#229ED9]/30 flex items-center justify-center text-[#229ED9] shrink-0">
+            <div className="saved-avatar-box">
               <Bookmark size={20} />
             </div>
           ) : currentChat.avatar ? (
             <img
               src={currentChat.avatar}
               alt={currentChat.name}
-              className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0"
+              className="chat-header-avatar-img"
             />
           ) : (
-            <div className="w-10 h-10 rounded-2xl bg-[#111111] border border-white/5 flex items-center justify-center font-bold text-white text-base shrink-0">
+            <div className="chat-header-avatar-placeholder">
               {currentChat.name[0]}
             </div>
           )}
 
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-white truncate leading-tight">{currentChat.name}</h3>
-            <p className="text-[11px] text-white/40 truncate font-normal leading-tight mt-0.5">{renderSubtitle()}</p>
+          <div className="chat-header-text-container">
+            <h3 className="chat-header-name">{currentChat.name}</h3>
+            <p className="chat-header-subtitle">{renderSubtitle()}</p>
           </div>
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="chat-header-actions">
         <button
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+          className="btn-chat-header-action transition-subtle"
           title="Qidiruv"
         >
           <Search size={18} />
@@ -89,14 +90,14 @@ export const ChatHeader: React.FC<Props> = ({ onStartCall }) => {
           <>
             <button
               onClick={() => handleCallClick(false)}
-              className="hidden sm:flex w-9 h-9 rounded-xl items-center justify-center text-white/55 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+              className="btn-chat-header-call transition-subtle"
               title="Audio qo'ng'iroq"
             >
               <Phone size={18} />
             </button>
             <button
               onClick={() => handleCallClick(true)}
-              className="hidden sm:flex w-9 h-9 rounded-xl items-center justify-center text-white/55 hover:text-white hover:bg-white/5 transition-subtle cursor-pointer"
+              className="btn-chat-header-call transition-subtle"
               title="Video muloqot"
             >
               <Video size={18} />
@@ -107,7 +108,7 @@ export const ChatHeader: React.FC<Props> = ({ onStartCall }) => {
         {currentChat.type !== 'saved' && (
           <button
             onClick={handleDeleteChat}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
+            className="btn-chat-header-delete transition-subtle"
             title="Chatni o'chirish"
           >
             <Trash2 size={18} />
@@ -116,10 +117,10 @@ export const ChatHeader: React.FC<Props> = ({ onStartCall }) => {
 
         <button
           onClick={toggleRightPanel}
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-subtle cursor-pointer ${
+          className={`btn-chat-header-panel transition-subtle ${
             isRightPanelOpen
-              ? 'bg-[#229ED9]/15 text-[#229ED9] border border-[#229ED9]/30'
-              : 'text-white/55 hover:text-white hover:bg-white/5'
+              ? 'btn-chat-header-panel-active'
+              : ''
           }`}
           title="Ma'lumot paneli"
         >

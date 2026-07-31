@@ -1,0 +1,70 @@
+/* Pinned Message Bar Styles */
+
+.pinned-bar {
+  padding: 0.5rem 1rem;
+  background-color: #0B0B0B;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pinned-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 0%;
+  cursor: pointer;
+}
+
+.pinned-indicator-line {
+  width: 0.125rem;
+  height: 1.75rem;
+  background-color: #229ED9;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.pinned-text-box {
+  min-width: 0;
+}
+
+.pinned-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #229ED9;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.pin-rotate-icon {
+  transform: rotate(45deg);
+}
+
+.pinned-bar-text {
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.75rem;
+  margin: 0;
+}
+
+.btn-unpin {
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.25rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-unpin:hover {
+  color: #ffffff;
+}

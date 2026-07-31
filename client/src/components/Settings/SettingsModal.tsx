@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  X, User as UserIcon, Bell, Lock, Palette, Globe, Monitor, Info, LogOut, Check, Camera, PhoneOff, Phone
+  X, User as UserIcon, Bell, Lock, Palette, Globe, Monitor, Info, LogOut, Check, Camera, PhoneOff, Phone, Loader2
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { api } from '../../lib/api';
+import '../../styles/SettingsModal.css';
 
 export const SettingsModal: React.FC = () => {
   const { isSettingsOpen, setIsSettingsOpen, user, updateProfile, logout } = useStore();
@@ -17,6 +18,53 @@ export const SettingsModal: React.FC = () => {
   const [bio, setBio] = useState(user?.bio || '');
   const [allowCalls, setAllowCalls] = useState(user?.allowCalls !== false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Username validation state
+  const [usernameCheck, setUsernameCheck] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string | null;
+    error: string | null;
+  }>({ checking: false, available: null, message: null, error: null });
+
+  useEffect(() => {
+    const clean = username.trim().replace(/^@+/, '').toLowerCase();
+    if (!clean) {
+      setUsernameCheck({ checking: false, available: false, message: null, error: "Username kiritilishi shart" });
+      return;
+    }
+
+    if (!/^[a-z0-9_]{3,32}$/.test(clean)) {
+      setUsernameCheck({
+        checking: false,
+        available: false,
+        message: null,
+        error: "Username 3-32 ta kichik lotin harfi, raqam yoki '_' bo'lishi kerak"
+      });
+      return;
+    }
+
+    if (user?.username && clean === user.username.toLowerCase()) {
+      setUsernameCheck({ checking: false, available: true, message: "Joriy username", error: null });
+      return;
+    }
+
+    setUsernameCheck({ checking: true, available: null, message: null, error: null });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get(`/api/chats/check-username/${encodeURIComponent(clean)}?currentId=${user?.id || ''}`);
+        if (res.data?.available) {
+          setUsernameCheck({ checking: false, available: true, message: "Bu username bo'sh va foydalanishga tayyor!", error: null });
+        } else {
+          setUsernameCheck({ checking: false, available: false, message: null, error: res.data?.message || "Bu username allaqachon band" });
+        }
+      } catch {
+        setUsernameCheck({ checking: false, available: false, message: null, error: "Tekshirishda xatolik bor" });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [username, user?.username, user?.id]);
 
   if (!isSettingsOpen) return null;
 
@@ -54,19 +102,19 @@ export const SettingsModal: React.FC = () => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 select-none">
+    <div className="settings-overlay">
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
         transition={{ duration: 0.2 }}
-        className="w-full max-w-3xl h-[560px] bg-[#0B0B0B] border border-white/10 rounded-2xl shadow-2xl flex overflow-hidden relative"
+        className="settings-card"
       >
         {/* Left Sidebar Tabs */}
-        <div className="w-64 bg-[#000000] border-r border-white/5 p-3 flex flex-col justify-between shrink-0">
+        <div className="settings-sidebar">
           <div>
-            <h3 className="text-sm font-bold text-white px-3 py-2 mb-2">Sozlamalar</h3>
-            <div className="space-y-1">
+            <h3 className="settings-sidebar-title">Sozlamalar</h3>
+            <div className="settings-nav-list">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.key;
@@ -74,10 +122,10 @@ export const SettingsModal: React.FC = () => {
                   <button
                     key={item.key}
                     onClick={() => setActiveTab(item.key as any)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-subtle cursor-pointer ${
+                    className={`btn-settings-nav transition-subtle ${
                       isActive
-                        ? 'bg-[#229ED9]/15 text-[#229ED9] border border-[#229ED9]/30'
-                        : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                        ? 'btn-settings-nav-active'
+                        : 'btn-settings-nav-inactive'
                     }`}
                   >
                     <Icon size={16} /> {item.label}
@@ -92,102 +140,122 @@ export const SettingsModal: React.FC = () => {
               setIsSettingsOpen(false);
               void handleLogout();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[#FF3B30] hover:bg-[#FF3B30]/10 transition-subtle cursor-pointer"
+            className="btn-settings-logout transition-subtle"
           >
             <LogOut size={16} /> Tizimdan chiqish
           </button>
         </div>
 
         {/* Right Content */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#0B0B0B]">
+        <div className="settings-content">
           {/* Header */}
-          <div className="h-14 px-6 border-b border-white/5 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white">
+          <div className="settings-content-header">
+            <h4 className="settings-content-title">
               {navItems.find((n) => n.key === activeTab)?.label}
             </h4>
             <button
               onClick={() => setIsSettingsOpen(false)}
-              className="text-white/40 hover:text-white transition-subtle p-1.5 rounded-xl cursor-pointer"
+              className="btn-close-settings transition-subtle"
             >
               <X size={18} />
             </button>
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="settings-content-body">
             {saveSuccess && (
-              <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+              <div className="settings-toast-success">
                 <Check size={14} /> Sozlamalar saqlandi!
               </div>
             )}
 
             {/* TAB: PROFILE */}
             {activeTab === 'profile' && (
-              <form onSubmit={handleSaveProfile} className="space-y-4 max-w-md">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="relative group">
+              <form onSubmit={handleSaveProfile} className="profile-form">
+                <div className="profile-avatar-row">
+                  <div className="profile-avatar-wrapper">
                     <img
                       src={user?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=avatar'}
                       alt="Avatar"
-                      className="w-20 h-20 rounded-3xl object-cover border border-white/10"
+                      className="profile-avatar-img"
                     />
-                    <div className="absolute inset-0 bg-black/50 rounded-3xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                      <Camera size={20} className="text-white" />
+                    <div className="profile-avatar-hover-overlay">
+                      <Camera size={20} style={{ color: '#ffffff' }} />
                     </div>
                   </div>
                   <div>
-                    <h5 className="text-sm font-semibold text-white">{user?.firstName} {user?.lastName}</h5>
-                    <p className="text-xs text-[#229ED9]">@{user?.username}</p>
+                    <h5 className="profile-user-name">{user?.firstName} {user?.lastName}</h5>
+                    <p className="profile-user-username">@{user?.username}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="form-grid-2">
                   <div>
-                    <label className="block text-xs text-white/50 mb-1 font-medium">Ism</label>
+                    <label className="input-label">Ism</label>
                     <input
                       type="text"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
-                      className="w-full bg-[#111111] border border-white/5 text-white text-xs rounded-xl px-3 py-2.5 outline-none focus:border-[#229ED9]/50 transition-subtle"
+                      className="input-text transition-subtle"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-white/50 mb-1 font-medium">Familiya</label>
+                    <label className="input-label">Familiya</label>
                     <input
                       type="text"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
-                      className="w-full bg-[#111111] border border-white/5 text-white text-xs rounded-xl px-3 py-2.5 outline-none focus:border-[#229ED9]/50 transition-subtle"
+                      className="input-text transition-subtle"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs text-white/50 mb-1 font-medium">Foydalanuvchi nomi (Username)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-white/40 text-xs">@</span>
+                  <label className="input-label">Foydalanuvchi nomi (Username)</label>
+                  <div className={`input-text-prefix-wrapper ${usernameCheck.error ? 'input-error-border' : usernameCheck.available && usernameCheck.message ? 'input-success-border' : ''}`}>
+                    <span className="input-prefix-icon">@</span>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full bg-[#111111] border border-white/5 text-white text-xs rounded-xl pl-7 pr-3 py-2.5 outline-none focus:border-[#229ED9]/50 transition-subtle"
+                      className="input-text-prefix transition-subtle"
                     />
                   </div>
+                  {usernameCheck.checking && (
+                    <p style={{ fontSize: '11px', color: '#93c5fd', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Loader2 size={12} className="animate-spin" /> Backend bo'yicha tekshirilmoqda...
+                    </p>
+                  )}
+                  {usernameCheck.error && (
+                    <p style={{ fontSize: '11px', color: '#f87171', marginTop: '4px', fontWeight: 500 }}>
+                      ⚠️ {usernameCheck.error}
+                    </p>
+                  )}
+                  {usernameCheck.available && usernameCheck.message && (
+                    <p style={{ fontSize: '11px', color: '#34d399', marginTop: '4px', fontWeight: 500 }}>
+                      ✓ {usernameCheck.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-xs text-white/50 mb-1 font-medium">Haqida (Bio)</label>
+                  <label className="input-label">Haqida (Bio)</label>
                   <textarea
                     rows={2}
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
-                    className="w-full bg-[#111111] border border-white/5 text-white text-xs rounded-xl px-3 py-2.5 outline-none focus:border-[#229ED9]/50 transition-subtle resize-none"
+                    className="textarea-bio transition-subtle"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-medium text-xs px-5 py-2.5 rounded-xl transition-subtle cursor-pointer"
+                  disabled={Boolean(usernameCheck.error) || usernameCheck.checking || !firstName.trim()}
+                  className={`btn-save-profile transition-subtle ${
+                    usernameCheck.error || usernameCheck.checking || !firstName.trim()
+                      ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                      : ''
+                  }`}
                 >
                   O‘zgarishlarni Saqlash
                 </button>
@@ -196,49 +264,49 @@ export const SettingsModal: React.FC = () => {
 
             {/* TAB: NOTIFICATIONS */}
             {activeTab === 'notifications' && (
-              <div className="space-y-4 max-w-md text-xs">
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#111111] border border-white/5">
+              <div className="tab-settings-list">
+                <div className="setting-toggle-row">
                   <div>
-                    <p className="font-semibold text-white">Shaxsiy suhbatlar bildirishnomasi</p>
-                    <p className="text-white/40">Yangi xabarlar kelganda tovush chiqarish</p>
+                    <p className="setting-toggle-title">Shaxsiy suhbatlar bildirishnomasi</p>
+                    <p className="setting-toggle-desc">Yangi xabarlar kelganda tovush chiqarish</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="accent-[#229ED9] w-4 h-4" />
+                  <input type="checkbox" defaultChecked style={{ accentColor: '#229ED9', width: 16, height: 16 }} />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-[#111111] border border-white/5">
+                <div className="setting-toggle-row">
                   <div>
-                    <p className="font-semibold text-white">Guruhlar bildirishnomasi</p>
-                    <p className="text-white/40">Guruh xabarlarini ko'rsatish</p>
+                    <p className="setting-toggle-title">Guruhlar bildirishnomasi</p>
+                    <p className="setting-toggle-desc">Guruh xabarlarini ko'rsatish</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="accent-[#229ED9] w-4 h-4" />
+                  <input type="checkbox" defaultChecked style={{ accentColor: '#229ED9', width: 16, height: 16 }} />
                 </div>
               </div>
             )}
 
             {/* TAB: PRIVACY */}
             {activeTab === 'privacy' && (
-              <div className="space-y-4 max-w-md text-xs">
+              <div className="tab-settings-list">
                 {/* Qo'ng'iroq qilishni o'chirib qo'yish sozlamasi */}
-                <div className="p-3.5 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {allowCalls ? <Phone size={18} className="text-[#229ED9]" /> : <PhoneOff size={18} className="text-[#FF3B30]" />}
+                <div className="privacy-call-row">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {allowCalls ? <Phone size={18} style={{ color: '#229ED9' }} /> : <PhoneOff size={18} style={{ color: '#FF3B30' }} />}
                     <div>
-                      <p className="font-semibold text-white">Audio va Video Qo'ng'iroqlar</p>
-                      <p className="text-white/40">{allowCalls ? "Barcha foydalanuvchilar sizga qo'ng'iroq qila oladi" : "Qo'ng'iroqlar o'chirilgan (Hech kim qo'ng'iroq qila olmaydi)"}</p>
+                      <p className="setting-toggle-title">Audio va Video Qo'ng'iroqlar</p>
+                      <p className="setting-toggle-desc">{allowCalls ? "Barcha foydalanuvchilar sizga qo'ng'iroq qila oladi" : "Qo'ng'iroqlar o'chirilgan (Hech kim qo'ng'iroq qila olmaydi)"}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleToggleCalls(!allowCalls)}
-                    className={`w-12 h-7 rounded-full border transition-subtle relative cursor-pointer ${allowCalls ? 'bg-[#229ED9] border-[#229ED9]' : 'bg-white/10 border-white/10'}`}
+                    className={`toggle-switch-track transition-subtle ${allowCalls ? 'track-active' : 'track-inactive'}`}
                   >
-                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${allowCalls ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <span className={`toggle-switch-thumb ${allowCalls ? 'thumb-active' : 'thumb-inactive'}`} />
                   </button>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#111111] border border-white/5 flex items-center justify-between">
+                <div className="privacy-call-row">
                   <div>
-                    <p className="font-semibold text-white">Oxirgi marta ko'ringan vaqt</p>
-                    <p className="text-white/40">Barchaga ruxsat berilgan</p>
+                    <p className="setting-toggle-title">Oxirgi marta ko'ringan vaqt</p>
+                    <p className="setting-toggle-desc">Barchaga ruxsat berilgan</p>
                   </div>
                   <span className="text-[#229ED9] font-medium cursor-pointer">Barchaga</span>
                 </div>
@@ -247,12 +315,12 @@ export const SettingsModal: React.FC = () => {
 
             {/* TAB: APPEARANCE */}
             {activeTab === 'appearance' && (
-              <div className="space-y-4 max-w-md text-xs">
-                <div className="p-4 rounded-xl bg-[#111111] border border-white/5">
-                  <p className="font-semibold text-white mb-2">Mavzu uslubi</p>
+              <div className="tab-settings-list">
+                <div className="theme-card">
+                  <p className="setting-toggle-title" style={{ marginBottom: '0.5rem' }}>Mavzu uslubi</p>
                   <div className="flex gap-3">
-                    <div className="flex-1 p-3 rounded-xl bg-[#000000] border-2 border-[#229ED9] text-center cursor-pointer">
-                      <div className="w-4 h-4 rounded-full bg-[#229ED9] mx-auto mb-1" />
+                    <div className="theme-option">
+                      <div className="theme-circle" />
                       <span className="text-white font-semibold">Qorong'u Minimal (Apple)</span>
                     </div>
                   </div>
@@ -262,21 +330,21 @@ export const SettingsModal: React.FC = () => {
 
             {/* TAB: SESSIONS */}
             {activeTab === 'sessions' && (
-              <div className="space-y-3 max-w-md text-xs">
-                <div className="p-3 rounded-xl bg-[#111111] border border-white/5">
+              <div className="tab-settings-list">
+                <div className="session-card">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold text-white">Xabarchi Web (Ushbu brauzer)</p>
+                    <p className="setting-toggle-title">Xabarchi Web (Ushbu brauzer)</p>
                     <span className="text-emerald-400 font-bold text-[10px]">FAOL</span>
                   </div>
-                  <p className="text-white/40">Toshkent, O‘zbekiston</p>
+                  <p className="setting-toggle-desc">Toshkent, O‘zbekiston</p>
                 </div>
               </div>
             )}
 
             {/* TAB: ABOUT */}
             {activeTab === 'about' && (
-              <div className="text-center py-8 text-xs space-y-2">
-                <div className="w-16 h-16 rounded-2xl bg-[#111111] border border-white/5 flex items-center justify-center mx-auto text-[#229ED9] mb-3">
+              <div className="about-box">
+                <div className="about-logo">
                   <Globe size={32} />
                 </div>
                 <h4 className="text-base font-bold text-white">Xabarchi Web v1.0.0</h4>

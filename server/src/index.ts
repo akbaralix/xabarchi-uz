@@ -33,7 +33,8 @@ import {
   joinChat,
   leaveChat,
   deleteChat,
-  getPublicChatMessages
+  getPublicChatMessages,
+  searchAll
 } from './controllers/chats.controller.js';
 
 import {
@@ -108,6 +109,7 @@ app.use('/api/auth/logout', authenticateJwt, logout);
 app.use('/api/auth/profile', authenticateJwt, updateProfile);
 
 app.get('/api/chats', authenticateJwt, getChats);
+app.get('/api/search', authenticateJwt, searchAll);
 app.post('/api/chats', authenticateJwt, createChat);
 app.post('/api/chats/:chatId/pin', authenticateJwt, togglePinChat);
 app.post('/api/chats/:chatId/mute', authenticateJwt, toggleMuteChat);

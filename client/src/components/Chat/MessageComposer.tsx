@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Smile, Send, X, Reply, Paperclip, Mic, Edit3 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { api } from '../../lib/api';
+import '../../styles/MessageComposer.css';
 
 export const MessageComposer: React.FC = () => {
   const {
@@ -186,29 +187,29 @@ export const MessageComposer: React.FC = () => {
   if (!activeChatId) return null;
 
   return (
-    <div className="p-3 bg-[#000000] border-t border-white/5 relative select-none">
+    <div className="composer-container">
       {/* Hidden file input */}
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileSelect}
         accept="image/*"
-        className="hidden"
+        style={{ display: 'none' }}
       />
 
       {/* Reply Banner */}
       {replyingTo && (
-        <div className="mb-2 p-2 rounded-xl bg-[#0B0B0B] border border-white/5 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="banner-reply">
+          <div className="banner-content-left">
             <Reply size={14} className="text-[#229ED9]" />
-            <div className="min-w-0">
-              <span className="font-semibold text-[#229ED9] text-[11px] block">{replyingTo.senderName}</span>
-              <span className="text-white/60 truncate block">{replyingTo.text}</span>
+            <div className="banner-text-box">
+              <span className="banner-title">{replyingTo.senderName}</span>
+              <span className="banner-desc">{replyingTo.text}</span>
             </div>
           </div>
           <button
             onClick={() => setReplyingTo(null)}
-            className="text-white/40 hover:text-white transition-subtle"
+            className="btn-banner-close transition-subtle"
           >
             <X size={14} />
           </button>
@@ -217,12 +218,12 @@ export const MessageComposer: React.FC = () => {
 
       {/* Edit Banner */}
       {editingMessage && (
-        <div className="mb-2 p-2 rounded-xl bg-[#0B0B0B] border border-[#229ED9]/30 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="banner-edit">
+          <div className="banner-content-left">
             <Edit3 size={14} className="text-[#229ED9]" />
-            <div className="min-w-0">
-              <span className="font-semibold text-[#229ED9] text-[11px] block">Xabarni tahrirlash</span>
-              <span className="text-white/60 truncate block">{editingMessage.text}</span>
+            <div className="banner-text-box">
+              <span className="banner-title">Xabarni tahrirlash</span>
+              <span className="banner-desc">{editingMessage.text}</span>
             </div>
           </div>
           <button
@@ -230,7 +231,7 @@ export const MessageComposer: React.FC = () => {
               setEditingMessage(null);
               setText('');
             }}
-            className="text-white/40 hover:text-white transition-subtle"
+            className="btn-banner-close transition-subtle"
           >
             <X size={14} />
           </button>
@@ -239,13 +240,13 @@ export const MessageComposer: React.FC = () => {
 
       {/* Emoji Picker Popup */}
       {showEmojiPicker && (
-        <div className="absolute bottom-16 left-4 z-30 bg-[#0B0B0B] border border-white/10 p-3 rounded-2xl shadow-2xl w-64">
-          <div className="grid grid-cols-5 gap-2">
+        <div className="emoji-picker-popup">
+          <div className="emoji-grid">
             {EMOJIS.map((emoji) => (
               <button
                 key={emoji}
                 onClick={() => setText((prev) => prev + emoji)}
-                className="text-xl p-1.5 hover:bg-white/5 rounded-xl transition-subtle cursor-pointer"
+                className="emoji-item transition-subtle"
               >
                 {emoji}
               </button>
@@ -255,23 +256,23 @@ export const MessageComposer: React.FC = () => {
       )}
 
       {isChannel && (
-        <div className="mb-2 text-[11px] text-white/40 px-1">
+        <div className="channel-note">
           Kanal postlari barcha obunachilarga ko‘rinadi.
         </div>
       )}
 
       {/* Voice Recording Mode */}
       {isRecording ? (
-        <div className="flex items-center justify-between bg-[#0B0B0B] border border-red-500/30 rounded-2xl px-4 py-2 text-xs">
-          <div className="flex items-center gap-2 text-red-400 animate-pulse">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+        <div className="recording-bar">
+          <div className="recording-status animate-pulse">
+            <div className="recording-dot" />
             <span>Ovoz yozilmoqda... ({Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')})</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="recording-actions">
             <button
               onClick={cancelRecording}
-              className="p-1.5 text-white/40 hover:text-white transition-subtle cursor-pointer"
+              className="btn-recording-cancel transition-subtle"
               title="Bekor qilish"
             >
               <X size={18} />
@@ -279,7 +280,7 @@ export const MessageComposer: React.FC = () => {
 
             <button
               onClick={stopAndSendRecording}
-              className="w-8 h-8 rounded-xl bg-red-500 text-white flex items-center justify-center transition-subtle hover:bg-red-600 cursor-pointer"
+              className="btn-recording-send transition-subtle"
               title="Yuborish"
             >
               <Send size={14} />
@@ -288,10 +289,10 @@ export const MessageComposer: React.FC = () => {
         </div>
       ) : (
         /* Regular Message Bar */
-        <div className="flex items-end gap-2 bg-[#0B0B0B] border border-white/5 rounded-2xl px-3 py-2">
+        <div className="composer-main-bar">
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="text-white/40 hover:text-white transition-subtle p-1.5 rounded-xl cursor-pointer"
+            className="btn-composer-icon transition-subtle"
             title="Emoji"
           >
             <Smile size={20} />
@@ -300,7 +301,7 @@ export const MessageComposer: React.FC = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="text-white/40 hover:text-white transition-subtle p-1.5 rounded-xl cursor-pointer disabled:opacity-50"
+            className="btn-composer-icon transition-subtle"
             title="Rasm yuklash"
           >
             <Paperclip size={20} />
@@ -313,22 +314,22 @@ export const MessageComposer: React.FC = () => {
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             placeholder={editingMessage ? 'Tahrirlangan matnni kiriting...' : isChannel ? 'Kanalga post yozing...' : 'Xabar yozing...'}
-            className="flex-1 bg-transparent text-white text-xs sm:text-sm outline-none resize-none py-1 max-h-32 placeholder:text-white/40 leading-relaxed"
+            className="composer-textarea"
           />
 
           {text.trim() || editingMessage ? (
             <button
               onClick={handleSend}
               disabled={!text.trim()}
-              className="w-9 h-9 rounded-xl bg-[#229ED9] text-white flex items-center justify-center transition-subtle hover:bg-[#229ED9]/90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+              className="btn-composer-send transition-subtle"
               title={editingMessage ? 'Saqlash' : isChannel ? 'Post qilish' : 'Yuborish'}
             >
-              <Send size={16} className="transform translate-x-0.5" />
+              <Send size={16} style={{ transform: 'translateX(2px)' }} />
             </button>
           ) : (
             <button
               onClick={startRecording}
-              className="w-9 h-9 rounded-xl bg-white/5 text-white/70 hover:text-white hover:bg-white/10 flex items-center justify-center transition-subtle cursor-pointer shrink-0"
+              className="btn-composer-mic transition-subtle"
               title="Ovozli xabar yozish"
             >
               <Mic size={18} />

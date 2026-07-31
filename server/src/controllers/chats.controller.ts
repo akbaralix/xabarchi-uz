@@ -78,6 +78,8 @@ export const getChats = async (req: AuthenticatedRequest, res: Response, next: N
 export const checkUsernameAvailability = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const username = normalizeUsername(req.params.username || '');
+    const currentId = (req.query.currentId as string) || (req.query.excludeId as string) || '';
+
     if (!isValidUsername(username)) {
       res.json({
         success: true,
@@ -91,17 +93,102 @@ export const checkUsernameAvailability = async (req: AuthenticatedRequest, res: 
     const existingChat = await ChatModel.findOne({ username });
     const existingUser = await UserModel.findOne({ username });
 
-    if (existingChat || existingUser) {
+    const isMatchCurrentChat = existingChat && currentId && existingChat._id.toString() === currentId;
+    const isMatchCurrentUser = existingUser && currentId && existingUser._id.toString() === currentId;
+
+    if ((existingChat && !isMatchCurrentChat) || (existingUser && !isMatchCurrentUser)) {
       res.json({
         success: true,
         available: false,
         reason: 'taken',
-        message: 'Bu username band'
+        message: 'Bu username allaqachon band'
       });
       return;
     }
 
     res.json({ success: true, available: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const searchAll = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const query = (req.query.q as string || '').trim();
+    if (!query || query.length < 1) {
+      res.json({
+        success: true,
+        users: [],
+        channels: [],
+        groups: []
+      });
+      return;
+    }
+
+    const isAtSearch = query.startsWith('@');
+    const cleanQuery = normalizeUsername(query);
+    const regex = new RegExp(cleanQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    const userId = req.user?._id?.toString();
+
+    // 1. Search Users
+    const usersRaw = await UserModel.find({
+      $or: [
+        { username: regex },
+        { firstName: regex },
+        { lastName: regex }
+      ]
+    }).limit(20);
+
+    const users = usersRaw
+      .filter((u) => u._id.toString() !== userId)
+      .map((u) => ({
+        id: u._id.toString(),
+        firstName: u.firstName,
+        lastName: u.lastName || '',
+        username: u.username || '',
+        avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username || u._id.toString()}`,
+        bio: u.bio || '',
+        isOnline: Boolean(u.isOnline)
+      }));
+
+    // 2. Search Channels
+    const channelsRaw = await ChatModel.find({
+      type: 'channel',
+      $or: [
+        { name: regex },
+        { username: regex }
+      ]
+    }).limit(20);
+
+    const channels = channelsRaw.map((c) => serializeChat(c, userId));
+
+    // 3. Search Groups
+    const groupsRaw = await ChatModel.find({
+      type: 'group',
+      $or: [
+        { name: regex },
+        { username: regex }
+      ]
+    }).limit(20);
+
+    const groups = groupsRaw.map((c) => serializeChat(c, userId));
+
+    // If search started with @, sort exact username match to top
+    if (isAtSearch && cleanQuery) {
+      users.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+      channels.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+      groups.sort((a, b) => (a.username.toLowerCase() === cleanQuery ? -1 : b.username.toLowerCase() === cleanQuery ? 1 : 0));
+    }
+
+    res.json({
+      success: true,
+      query: cleanQuery,
+      isAtSearch,
+      users,
+      channels,
+      groups
+    });
   } catch (error) {
     next(error);
   }
@@ -134,8 +221,9 @@ export const createChat = async (req: AuthenticatedRequest, res: Response, next:
         return;
       }
       const existingChat = await ChatModel.findOne({ username: normalizedUsername });
-      if (existingChat) {
-        res.status(409).json({ success: false, message: 'Bu username band' });
+      const existingUser = await UserModel.findOne({ username: normalizedUsername });
+      if (existingChat || existingUser) {
+        res.status(409).json({ success: false, message: 'Bu username allaqachon band' });
         return;
       }
     }

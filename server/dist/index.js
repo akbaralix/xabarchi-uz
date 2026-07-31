@@ -70,12 +70,14 @@ app.use('/api/auth/me', auth_middleware_js_1.authenticateJwt, auth_controller_js
 app.use('/api/auth/logout', auth_middleware_js_1.authenticateJwt, auth_controller_js_1.logout);
 app.use('/api/auth/profile', auth_middleware_js_1.authenticateJwt, auth_controller_js_1.updateProfile);
 app.get('/api/chats', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.getChats);
+app.get('/api/search', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.searchAll);
 app.post('/api/chats', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.createChat);
 app.post('/api/chats/:chatId/pin', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.togglePinChat);
 app.post('/api/chats/:chatId/mute', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.toggleMuteChat);
 app.post('/api/chats/open-direct/:username', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.openDirectChatByUsername);
 app.post('/api/chats/:chatId/join', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.joinChat);
 app.post('/api/chats/:chatId/leave', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.leaveChat);
+app.delete('/api/chats/:chatId', auth_middleware_js_1.authenticateJwt, chats_controller_js_1.deleteChat);
 app.get('/api/chats/:chatId/messages', auth_middleware_js_1.authenticateJwt, messages_controller_js_1.getMessages);
 app.post('/api/messages', auth_middleware_js_1.authenticateJwt, messages_controller_js_1.sendMessage);
 app.put('/api/messages/:messageId', auth_middleware_js_1.authenticateJwt, messages_controller_js_1.editMessage);
