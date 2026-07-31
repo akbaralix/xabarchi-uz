@@ -8,9 +8,8 @@ export const getApiBaseUrl = (): string => {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       return 'http://localhost:5001';
     }
-    return window.location.origin;
   }
-  return 'http://localhost:5001';
+  return 'https://xabarchi-uz.onrender.com';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
